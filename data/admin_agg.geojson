@@ -1,0 +1,107 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "hromada": "Харківська МТГ",
+        "sum_participants": 120
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              36.1,
+              50.05
+            ],
+            [
+              36.4,
+              50.05
+            ],
+            [
+              36.4,
+              49.9
+            ],
+            [
+              36.1,
+              49.9
+            ],
+            [
+              36.1,
+              50.05
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "hromada": "Ізюмська МТГ",
+        "sum_participants": 80
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              37.2,
+              49.26
+            ],
+            [
+              37.35,
+              49.26
+            ],
+            [
+              37.35,
+              49.14
+            ],
+            [
+              37.2,
+              49.14
+            ],
+            [
+              37.2,
+              49.26
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "hromada": "Лозівська МТГ",
+        "sum_participants": 260
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              35.7,
+              48.95
+            ],
+            [
+              35.95,
+              48.95
+            ],
+            [
+              35.95,
+              48.83
+            ],
+            [
+              35.7,
+              48.83
+            ],
+            [
+              35.7,
+              48.95
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

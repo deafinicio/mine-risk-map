@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Mine Risk Map — Kharkiv Oblast</title>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css">
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100vh; }
+    .legend { background: white; padding: 8px 10px; line-height: 1.4; border-radius: 6px; }
+    .legend i { width: 14px; height: 14px; display: inline-block; margin-right: 6px; opacity: 0.8; }
+  </style>
+</head>
+<body>
+<div id="map"></div>
+
+<script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+<script>
+// 1) Карта
+const map = L.map('map').setView([49.9935, 36.2304], 8); // центр на Харкові
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  maxZoom: 19,
+  attribution: '&copy; OpenStreetMap contributors'
+}).addTo(map);
+
+// 2) Завантаження точок (кластер)
+const cluster = L.markerClusterGroup();
+fetch('data/sessions.geojson')
+  .then(r => r.json())
+  .then(geo => {
+    const pts = L.geoJSON(geo, {
+      pointToLayer: (f, latlng) => L.marker(latlng),
+      onEachFeature: (f, layer) => {
+        const p = f.properties || {};
+        layer.bindPopup(`
+          <b>${p.datetime || '—'}</b><br>
+          ${p.hromada || ''}${p.rayon ? ', ' + p.rayon : ''}<br>
+          Аудиторія: ${p.audience || '—'}<br>
+          Інструктор: ${p.instructor || '—'}<br>
+          Осіб: ${p.participants ?? '—'}
+        `);
+      }
+    });
+    cluster.addLayer(pts);
+    map.addLayer(cluster);
+  });
+
+// 3) Хороплет по громадах (сума учасників за період - демо)
+function color(v){
+  return v > 5000 ? '#800026' :
+         v > 1000 ? '#BD0026' :
+         v > 500  ? '#E31A1C' :
+         v > 100  ? '#FC4E2A' :
+         v > 50   ? '#FD8D3C' :
+         v > 10   ? '#FEB24C' :
+                    '#FFEDA0';
+}
+
+fetch('data/admin_agg.geojson')
+  .then(r => r.json())
+  .then(geo => {
+    L.geoJSON(geo, {
+      style: f => ({
+        weight: 1,
+        color: '#999',
+        fillOpacity: 0.7,
+        fillColor: color((f.properties && f.properties.sum_participants) || 0)
+      }),
+      onEachFeature: (f, layer) => {
+        const p = f.properties || {};
+        layer.bindPopup(`<b>${p.hromada || 'Громада'}</b><br>Осіб за період: ${p.sum_participants ?? 0}`);
+      }
+    }).addTo(map);
+  });
+
+// 4) Легенда
+const legend = L.control({position: 'bottomright'});
+legend.onAdd = function () {
+  const div = L.DomUtil.create('div', 'legend');
+  const grades = [0, 10, 50, 100, 500, 1000, 5000];
+  div.innerHTML += '<b>Осіб за період</b><br>';
+  for (let i = 0; i < grades.length; i++) {
+    const from = grades[i], to = grades[i + 1];
+    const c = color(from + 0.1);
+    div.innerHTML += `<i style="background:${c}"></i> ${from}${to ? '&ndash;' + to : '+'}<br>`;
+  }
+  return div;
+};
+legend.addTo(map);
+</script>
+</body>
+</html>

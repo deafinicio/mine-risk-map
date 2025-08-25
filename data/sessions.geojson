@@ -1,0 +1,65 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          36.2304,
+          49.9935
+        ]
+      },
+      "properties": {
+        "id": "sess-0001",
+        "datetime": "2025-08-01T10:00:00+03:00",
+        "hromada": "Харківська МТГ",
+        "rayon": "Харківський",
+        "audience": "Підлітки",
+        "instructor": "Інструктор А",
+        "participants": 45,
+        "notes": "Школа №1"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          37.276,
+          49.212
+        ]
+      },
+      "properties": {
+        "id": "sess-0002",
+        "datetime": "2025-08-05T12:00:00+03:00",
+        "hromada": "Ізюмська МТГ",
+        "rayon": "Ізюмський",
+        "audience": "Вчителі",
+        "instructor": "Інструктор Б",
+        "participants": 28,
+        "notes": "Будинок культури"
+      }
+    },
+    {
+      "type": "Feature",
+      "geometry": {
+        "type": "Point",
+        "coordinates": [
+          35.814,
+          48.889
+        ]
+      },
+      "properties": {
+        "id": "sess-0003",
+        "datetime": "2025-08-10T09:30:00+03:00",
+        "hromada": "Лозівська МТГ",
+        "rayon": "Лозівський",
+        "audience": "Пенсіонери",
+        "instructor": "Інструктор В",
+        "participants": 60,
+        "notes": "Центр громади"
+      }
+    }
+  ]
+}
