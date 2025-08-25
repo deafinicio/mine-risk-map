@@ -1,31 +1,4 @@
-<!DOCTYPE html>
-<html lang="uk">
-<head>
-<meta charset="UTF-8">
-<title>Mine Risk Map — Kharkiv Oblast</title>
-<!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
-<!-- TimeDimension CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css"/>
-<style>
-  html, body { height:100%; margin:0; }
-  #map { height:100vh; }
-  .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-  .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
-  .search-control { background:#fff; padding:8px 10px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-  .search-control input, .search-control button { display:block; margin-bottom:4px; width:100%; padding:4px; border:1px solid #ccc; border-radius:4px; }
-</style>
-</head>
-<body>
-<div id="map"></div>
-<!-- Leaflet JS -->
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
-<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
-<script>
+
 // 1) MAP CORE
 const supportsTD = typeof L.TimeDimension !== 'undefined';
 const map = L.map('map', supportsTD ? {
@@ -52,19 +25,12 @@ function color(v){
 const choroplethLayer = L.layerGroup().addTo(map);
 fetch('data/admin_agg.geojson').then(r=>r.json()).then(geo=>{
   const layer = L.geoJSON(geo, {
-    style: function(f) {
-      var sumVal = 0;
-      if (f.properties && f.properties.sum_participants !== undefined && f.properties.sum_participants !== null) {
-        sumVal = f.properties.sum_participants;
-      }
-      return { weight:1, color:'#999', fillOpacity:0.7, fillColor: color(sumVal || 0) };
-    },
-    onEachFeature: function(f,l){
-      var p = f.properties || {};
-      var sumVal = (p.sum_participants !== undefined && p.sum_participants !== null) ? p.sum_participants : 0;
-      l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
-      l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
-      l.on('mouseout', function(){ l.setStyle({weight:1, color:'#999'}); });
+    style: f => ({ weight:1, color:'#999', fillOpacity:.7, fillColor: color((f.properties?.sum_participants)||0) }),
+    onEachFeature: (f,l)=>{
+      const p=f.properties||{};
+      l.bindPopup(`<b>${p.hromada||'Громада'}</b><br>Осіб за період: ${p.sum_participants??0}`);
+      l.on('mouseover', ()=>l.setStyle({weight:2,color:'#555'}));
+      l.on('mouseout', ()=>l.setStyle({weight:1,color:'#999'}));
     }
   });
   choroplethLayer.addLayer(layer);
@@ -89,14 +55,10 @@ function buildLayers(features) {
     pointToLayer: (f,latlng) => L.marker(latlng),
     onEachFeature: (f, layer) => {
       const p=f.properties||{};
-      var dateStr = p.datetime || '—';
-      var locationStr = (p.hromada || '') + (p.rayon ? ', ' + p.rayon : '');
-      var aud = p.audience || '—';
-      var instr = p.instructor || '—';
-      var participantsVal = (p.participants !== undefined && p.participants !== null) ? p.participants : '—';
-      var popupHtml = '<b>' + dateStr + '</b><br>' + locationStr + '<br>' +
-        'Аудиторія: ' + aud + '<br>Інструктор: ' + instr + '<br>Осіб: ' + participantsVal;
-      layer.bindPopup(popupHtml);
+      layer.bindPopup(
+        `<b>${p.datetime||'—'}</b><br>${p.hromada||''}${p.rayon?', '+p.rayon:''}<br>`+
+        `Аудиторія: ${p.audience||'—'}<br>Інструктор: ${p.instructor||'—'}<br>Осіб: ${p.participants??'—'}`
+      );
     }
   });
   clusterLayer.addLayer(markers);
@@ -113,13 +75,11 @@ function buildLayers(features) {
   }
   // heat
   if (typeof L.heatLayer !== 'undefined') {
-    const heatData = features.map(function(f) {
-      var coords = (f.geometry && f.geometry.coordinates);
-      var p = f.properties || {};
-      if (!coords) return null;
-      var partVal = (typeof p.participants === 'number') ? p.participants : 1;
-      var intensity = Math.min(1, partVal / 100);
-      return [coords[1], coords[0], intensity];
+    const heatData = features.map(f => {
+      const c=f.geometry?.coordinates, p=f.properties||{};
+      if(!c) return null;
+      const intensity = Math.min(1, (p.participants||1)/100);
+      return [c[1], c[0], intensity];
     }).filter(Boolean);
     if (!heatLayer) {
       heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
@@ -209,6 +169,3 @@ legend.addTo(map);
 
 // Initial load
 loadSessions('data/sessions.geojson?nocache=' + Date.now());
-</script>
-</body>
-</html>
