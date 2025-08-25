@@ -1,30 +1,30 @@
 <!doctype html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Mine Risk Map — Kharkiv Oblast</title>
 
   <!-- Leaflet core -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
   <!-- MarkerCluster -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster/dist/MarkerCluster.Default.css">
-  <script src="https://unpkg.com/leaflet.markercluster/dist/leaflet.markercluster.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
+  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
+  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+  <!-- TimeDimension (css+js) -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-timedimension/1.1.0/leaflet.timedimension.control.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-timedimension/1.1.0/leaflet.timedimension.min.js"></script>
 
   <!-- Heatmap -->
-  <script src="https://unpkg.com/leaflet.heat/dist/leaflet-heat.js"></script>
-
-  <!-- TimeDimension (time slider + control) -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css">
-  <script src="https://unpkg.com/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.min.js"></script>
 
   <style>
-    html, body { height: 100%; margin: 0; }
-    #map { height: 100vh; }
-    .legend { background:#fff; padding:8px 10px; line-height:1.4; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+    html, body { height:100%; margin:0; }
+    #map { height:100vh; }
+    .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
     .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
   </style>
 </head>
@@ -32,19 +32,14 @@
 <div id="map"></div>
 
 <script>
-// ------------------------------
-// 1) БАЗОВА КАРТА + time control
-// ------------------------------
-const map = L.map('map', {
+/* ---------------- 1) MAP CORE ---------------- */
+const supportsTD = typeof L.TimeDimension !== 'undefined';
+const map = L.map('map', supportsTD ? {
   zoomControl: true,
   timeDimension: true,
   timeDimensionControl: true,
-  timeDimensionOptions: {
-    // грубий інтервал; можна звузити під твої дати
-    timeInterval: "2022-06-01/2026-12-31",
-    period: "P1M" // крок слайдера: 1 місяць (можна 'P1D')
-  }
-}).setView([49.9935, 36.2304], 8);
+  timeDimensionOptions: { timeInterval: "2022-06-01/2026-12-31", period: "P1M" }
+} : { zoomControl:true }).setView([49.9935, 36.2304], 8);
 
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
@@ -52,151 +47,93 @@ const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
 
 const baseLayers = { 'OpenStreetMap': osm };
 
-// ------------------------------
-// 2) КОЛЬОРОВА ШКАЛА (для хороплету)
-// ------------------------------
+/* ---------------- 2) CHOROPLETH ---------------- */
 function color(v){
   return v > 5000 ? '#800026' :
          v > 1000 ? '#BD0026' :
          v > 500  ? '#E31A1C' :
          v > 100  ? '#FC4E2A' :
          v > 50   ? '#FD8D3C' :
-         v > 10   ? '#FEB24C' :
-                    '#FFEDA0';
+         v > 10   ? '#FEB24C' : '#FFEDA0';
 }
-
-// ------------------------------
-// 3) ХОРОПЛЕТ (полігони громад)
-// ------------------------------
 const choroplethLayer = L.layerGroup().addTo(map);
-fetch('data/admin_agg.geojson')
-  .then(r => r.json())
-  .then(geo => {
-    const layer = L.geoJSON(geo, {
-      style: f => ({
-        weight: 1, color: '#999',
-        fillOpacity: .7,
-        fillColor: color((f.properties && f.properties.sum_participants) || 0)
-      }),
-      onEachFeature: (f, l) => {
-        const p = f.properties || {};
-        l.bindPopup(`<b>${p.hromada || 'Громада'}</b><br>Осіб за період: ${p.sum_participants ?? 0}`);
-        l.on('mouseover', () => l.setStyle({weight:2, color:'#555'}));
-        l.on('mouseout',  () => l.setStyle({weight:1, color:'#999'}));
-      }
-    });
-    choroplethLayer.addLayer(layer);
+fetch('data/admin_agg.geojson').then(r=>r.json()).then(geo=>{
+  const layer = L.geoJSON(geo, {
+    style: f => ({ weight:1, color:'#999', fillOpacity:.7, fillColor: color((f.properties?.sum_participants)||0) }),
+    onEachFeature: (f,l)=>{
+      const p=f.properties||{};
+      l.bindPopup(`<b>${p.hromada||'Громада'}</b><br>Осіб за період: ${p.sum_participants??0}`);
+      l.on('mouseover', ()=>l.setStyle({weight:2,color:'#555'}));
+      l.on('mouseout', ()=>l.setStyle({weight:1,color:'#999'}));
+    }
   });
+  choroplethLayer.addLayer(layer);
+}).catch(console.error);
 
-// ------------------------------
-// 4) ТОЧКИ: кластер + time layer + heatmap
-// ------------------------------
+/* ---------------- 3) POINTS: cluster + timedimension + heat ---------------- */
 const clusterLayer = L.markerClusterGroup();
 const timePointsGroup = L.layerGroup();
-let heatLayer; // створимо після завантаження
+let heatLayer = null;
 
-fetch('data/sessions.geojson')
-  .then(r => r.json())
-  .then(geo => {
-    // (a) Підготовка часу для TimeDimension:
-    // Плагін очікує 'properties.time' у ISO. У нас 'datetime' -> продублюємо
-    geo.features.forEach(f => {
-      if (f.properties) f.properties.time = f.properties.datetime;
-    });
-
-    // (b) Звичайні маркери (у кластері)
-    const markers = L.geoJSON(geo, {
-      pointToLayer: (f, latlng) => L.marker(latlng),
-      onEachFeature: (f, layer) => {
-        const p = f.properties || {};
-        layer.bindPopup(`
-          <b>${p.datetime || '—'}</b><br>
-          ${p.hromada || ''}${p.rayon ? ', ' + p.rayon : ''}<br>
-          Аудиторія: ${p.audience || '—'}<br>
-          Інструктор: ${p.instructor || '—'}<br>
-          Осіб: ${p.participants ?? '—'}
-        `);
-      }
-    });
-    clusterLayer.addLayer(markers);
-
-    // (c) TimeDimension-шар (показує точки, що відповідають активному часу)
-    const timeGeoJson = L.geoJSON(geo, {
-      pointToLayer: (f, latlng) => L.circleMarker(latlng, { radius: 6, color:'#0a84ff', fillColor:'#0a84ff', fillOpacity:.8 })
-    });
-    const tdLayer = L.timeDimension.layer.geoJson(timeGeoJson, {
-      updateTimeDimension: true,
-      addlastPoint: false,
-      duration: 'P15D',   // видимість точки ~15 днів від її дати (за бажанням)
-      waitForReady: true
-    });
-    timePointsGroup.addLayer(tdLayer);
-
-    // (d) Heatmap (інтенсивність за кількістю учасників)
-    // Leaflet.heat приймає [lat, lng, intensity 0..1]
-    const heatData = geo.features
-      .map(f => {
-        const c = f.geometry && f.geometry.coordinates;
-        const p = f.properties || {};
-        if (!c) return null;
-        // нормалізуємо інтенсивність: 100 осіб ~ 1.0 (можеш змінити scale)
-        const intensity = Math.min(1, (p.participants || 1) / 100);
-        return [c[1], c[0], intensity];
-      })
-      .filter(Boolean);
-
-    heatLayer = L.heatLayer(heatData, {
-      radius: 25, blur: 15, maxZoom: 12
-    });
+fetch('data/sessions.geojson').then(r=>r.json()).then(geo=>{
+  // markers (cluster)
+  const markers = L.geoJSON(geo, {
+    pointToLayer: (f,latlng)=>L.marker(latlng),
+    onEachFeature: (f,layer)=>{
+      const p=f.properties||{};
+      layer.bindPopup(
+        `<b>${p.datetime||'—'}</b><br>${p.hromada||''}${p.rayon?', '+p.rayon:''}<br>`+
+        `Аудиторія: ${p.audience||'—'}<br>Інструктор: ${p.instructor||'—'}<br>Осіб: ${p.participants??'—'}`
+      );
+    }
   });
+  clusterLayer.addLayer(markers);
 
-// ------------------------------
-// 5) ЛЕЙЄРИ ТА КОНТРОЛ
-// ------------------------------
-const overlays = {
-  'Кластер точок': clusterLayer,
-  'Точки у часі (Time slider)': timePointsGroup,
-  'Heatmap (щільність)': {
-    // трюк: додаємо функцію, щоб lazy-додати heatLayer, коли користувач увімкне
-    onAdd: function(map){ heatLayer && heatLayer.addTo(map); },
-    onRemove: function(map){ heatLayer && map.removeLayer(heatLayer); }
-  },
-  'Хороплет громад': choroplethLayer
-};
-
-// перетворимо overlays з об’єктів у контрольні шари
-const realOverlays = {};
-Object.keys(overlays).forEach(name => {
-  const val = overlays[name];
-  if (val.onAdd && val.onRemove) {
-    // wrap у LayerGroup-пустушку, щоб контрол знав як вмикати/вимикати
-    const proxy = L.layerGroup();
-    proxy.on('add', () => val.onAdd(map));
-    proxy.on('remove', () => val.onRemove(map));
-    realOverlays[name] = proxy;
-  } else {
-    realOverlays[name] = val;
+  // time layer (only if plugin loaded)
+  if (supportsTD) {
+    geo.features.forEach(f=>{ if(f.properties) f.properties.time = f.properties.datetime; });
+    const timeGeo = L.geoJSON(geo, { pointToLayer:(f,latlng)=>L.circleMarker(latlng,{radius:6,color:'#0a84ff',fillColor:'#0a84ff',fillOpacity:.8}) });
+    const td = L.timeDimension.layer.geoJson(timeGeo, { updateTimeDimension:true, addlastPoint:false, duration:'P15D', waitForReady:true });
+    timePointsGroup.addLayer(td);
   }
-});
 
-L.control.layers(baseLayers, realOverlays, { collapsed: false }).addTo(map);
+  // heat (only if plugin loaded)
+  if (typeof L.heatLayer !== 'undefined') {
+    const heatData = geo.features.map(f=>{
+      const c=f.geometry?.coordinates, p=f.properties||{};
+      if(!c) return null;
+      const intensity = Math.min(1, (p.participants||1)/100);
+      return [c[1], c[0], intensity];
+    }).filter(Boolean);
+    heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
+  }
+}).catch(console.error);
 
-// За замовчуванням вмикаємо кластер і хороплет
+/* ---------------- 4) LAYERS CONTROL ---------------- */
+const overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
+if (supportsTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
+// lazy proxy for heat
+if (typeof L.heatLayer !== 'undefined') {
+  const proxy = L.layerGroup();
+  proxy.on('add', ()=>{ heatLayer && heatLayer.addTo(map); });
+  proxy.on('remove', ()=>{ heatLayer && map.removeLayer(heatLayer); });
+  overlays['Heatmap (щільність)'] = proxy;
+}
+L.control.layers(baseLayers, overlays, {collapsed:false}).addTo(map);
+
+// default on:
 map.addLayer(clusterLayer);
 map.addLayer(choroplethLayer);
 
-// ------------------------------
-// 6) Легенда для хороплету
-// ------------------------------
-const legend = L.control({position: 'bottomright'});
-legend.onAdd = function () {
-  const div = L.DomUtil.create('div', 'legend');
-  const grades = [0, 10, 50, 100, 500, 1000, 5000];
-  div.innerHTML += '<b>Осіб за період</b><br>';
-  for (let i = 0; i < grades.length; i++) {
-    const from = grades[i], to = grades[i + 1];
-    const c = color(from + 0.1);
-    div.innerHTML += `<i style="background:${c}"></i> ${from}${to ? '&ndash;' + to : '+'}<br>`;
+/* ---------------- 5) LEGEND ---------------- */
+const legend = L.control({position:'bottomright'});
+legend.onAdd = function(){
+  const div = L.DomUtil.create('div','legend');
+  const grades=[0,10,50,100,500,1000,5000];
+  div.innerHTML+='<b>Осіб за період</b><br>';
+  for(let i=0;i<grades.length;i++){
+    const from=grades[i], to=grades[i+1], c=color(from+0.1);
+    div.innerHTML += `<i style="background:${c}"></i> ${from}${to?'&ndash;'+to:'+'}<br>`;
   }
   return div;
 };
