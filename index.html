@@ -1,38 +1,32 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="uk">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Mine Risk Map — Kharkiv Oblast</title>
-
-  <!-- Leaflet core -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
-  <!-- MarkerCluster -->
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">
-  <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css">
-  <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
-  <!-- TimeDimension (css+js) -->
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet-timedimension/1.1.0/leaflet.timedimension.control.min.css">
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet-timedimension/1.1.0/leaflet.timedimension.min.js"></script>
-
-  <!-- Heatmap -->
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.heat/0.2.0/leaflet-heat.min.js"></script>
-
-  <style>
-    html, body { height:100%; margin:0; }
-    #map { height:100vh; }
-    .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-    .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
-  </style>
+<meta charset="UTF-8">
+<title>Mine Risk Map — Kharkiv Oblast</title>
+<!-- Leaflet CSS -->
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<!-- TimeDimension CSS -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css"/>
+<style>
+  html, body { height:100%; margin:0; }
+  #map { height:100vh; }
+  .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+  .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
+  .search-control { background:#fff; padding:8px 10px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
+  .search-control input, .search-control button { display:block; margin-bottom:4px; width:100%; padding:4px; border:1px solid #ccc; border-radius:4px; }
+</style>
 </head>
 <body>
 <div id="map"></div>
-
+<!-- Leaflet JS -->
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
+<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
 <script>
-/* ---------------- 1) MAP CORE ---------------- */
+// 1) MAP CORE
 const supportsTD = typeof L.TimeDimension !== 'undefined';
 const map = L.map('map', supportsTD ? {
   zoomControl: true,
@@ -44,10 +38,9 @@ const map = L.map('map', supportsTD ? {
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
 }).addTo(map);
-
 const baseLayers = { 'OpenStreetMap': osm };
 
-/* ---------------- 2) CHOROPLETH ---------------- */
+// 2) CHOROPLETH
 function color(v){
   return v > 5000 ? '#800026' :
          v > 1000 ? '#BD0026' :
@@ -70,16 +63,24 @@ fetch('data/admin_agg.geojson').then(r=>r.json()).then(geo=>{
   choroplethLayer.addLayer(layer);
 }).catch(console.error);
 
-/* ---------------- 3) POINTS: cluster + timedimension + heat ---------------- */
+// 3) POINTS: cluster + time + heat
 const clusterLayer = L.markerClusterGroup();
 const timePointsGroup = L.layerGroup();
 let heatLayer = null;
+let allSessions = [];
 
-fetch('data/sessions.geojson').then(r=>r.json()).then(geo=>{
-  // markers (cluster)
+function buildLayers(features) {
+  // Clear old
+  clusterLayer.clearLayers();
+  timePointsGroup.clearLayers();
+  if (heatLayer) {
+    heatLayer.setLatLngs([]);
+  }
+  const geo = { type:'FeatureCollection', features: features };
+  // markers for cluster
   const markers = L.geoJSON(geo, {
-    pointToLayer: (f,latlng)=>L.marker(latlng),
-    onEachFeature: (f,layer)=>{
+    pointToLayer: (f,latlng) => L.marker(latlng),
+    onEachFeature: (f, layer) => {
       const p=f.properties||{};
       layer.bindPopup(
         `<b>${p.datetime||'—'}</b><br>${p.hromada||''}${p.rayon?', '+p.rayon:''}<br>`+
@@ -88,31 +89,84 @@ fetch('data/sessions.geojson').then(r=>r.json()).then(geo=>{
     }
   });
   clusterLayer.addLayer(markers);
-
-  // time layer (only if plugin loaded)
+  // time
   if (supportsTD) {
-    geo.features.forEach(f=>{ if(f.properties) f.properties.time = f.properties.datetime; });
-    const timeGeo = L.geoJSON(geo, { pointToLayer:(f,latlng)=>L.circleMarker(latlng,{radius:6,color:'#0a84ff',fillColor:'#0a84ff',fillOpacity:.8}) });
+    const featuresWithTime = features.map(f => {
+      const copy = JSON.parse(JSON.stringify(f));
+      if (copy.properties) copy.properties.time = copy.properties.datetime;
+      return copy;
+    });
+    const timeGeo = L.geoJSON({type:'FeatureCollection', features: featuresWithTime}, { pointToLayer: (f,latlng) => L.circleMarker(latlng,{radius:6,color:'#0a84ff',fillColor:'#0a84ff',fillOpacity:.8}) });
     const td = L.timeDimension.layer.geoJson(timeGeo, { updateTimeDimension:true, addlastPoint:false, duration:'P15D', waitForReady:true });
     timePointsGroup.addLayer(td);
   }
-
-  // heat (only if plugin loaded)
+  // heat
   if (typeof L.heatLayer !== 'undefined') {
-    const heatData = geo.features.map(f=>{
+    const heatData = features.map(f => {
       const c=f.geometry?.coordinates, p=f.properties||{};
       if(!c) return null;
       const intensity = Math.min(1, (p.participants||1)/100);
       return [c[1], c[0], intensity];
     }).filter(Boolean);
-    heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
+    if (!heatLayer) {
+      heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
+    } else {
+      heatLayer.setLatLngs(heatData);
+    }
   }
-}).catch(console.error);
+}
 
-/* ---------------- 4) LAYERS CONTROL ---------------- */
+function loadSessions(url) {
+  return fetch(url).then(r=>r.json()).then(geo => {
+    allSessions = geo.features;
+    buildLayers(allSessions);
+  }).catch(console.error);
+}
+
+function applyFilters() {
+  const searchText = document.getElementById('search-input').value.trim().toLowerCase();
+  const startValue = document.getElementById('start-date').value;
+  const endValue = document.getElementById('end-date').value;
+  const startDate = startValue ? new Date(startValue) : null;
+  const endDate = endValue ? new Date(endValue) : null;
+  const filtered = allSessions.filter(f => {
+    const p = f.properties || {};
+    const matchSearch = !searchText || (p.hromada && p.hromada.toLowerCase().includes(searchText)) || (p.rayon && p.rayon.toLowerCase().includes(searchText)) || (p.audience && p.audience.toLowerCase().includes(searchText));
+    const date = new Date(p.datetime);
+    const matchStart = !startDate || date >= startDate;
+    const matchEnd = !endDate || date <= endDate;
+    return matchSearch && matchStart && matchEnd;
+  });
+  buildLayers(filtered);
+}
+
+// Search control UI
+const searchControl = L.control({ position:'topright' });
+searchControl.onAdd = function(){
+  const div = L.DomUtil.create('div','search-control');
+  div.innerHTML = `
+    <input type="text" id="search-input" placeholder="Пошук..." title="Пошук по назві громади, району або аудиторії" />
+    <label>Від: <input type="date" id="start-date" /></label>
+    <label>До: <input type="date" id="end-date" /></label>
+    <button id="filter-btn" style="cursor:pointer;">Фільтрувати</button>
+    <button id="refresh-btn" style="cursor:pointer;">Оновити дані</button>
+  `;
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+searchControl.addTo(map);
+
+// Event listeners
+setTimeout(() => {
+  document.getElementById('filter-btn').addEventListener('click', applyFilters);
+  document.getElementById('refresh-btn').addEventListener('click', () => {
+    loadSessions('data/sessions.geojson?nocache=' + Date.now()).then(applyFilters);
+  });
+}, 0);
+
+// 4) LAYERS CONTROL
 const overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
 if (supportsTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
-// lazy proxy for heat
 if (typeof L.heatLayer !== 'undefined') {
   const proxy = L.layerGroup();
   proxy.on('add', ()=>{ heatLayer && heatLayer.addTo(map); });
@@ -121,11 +175,12 @@ if (typeof L.heatLayer !== 'undefined') {
 }
 L.control.layers(baseLayers, overlays, {collapsed:false}).addTo(map);
 
-// default on:
+// default layers
 map.addLayer(clusterLayer);
 map.addLayer(choroplethLayer);
+if (supportsTD) map.addLayer(timePointsGroup);
 
-/* ---------------- 5) LEGEND ---------------- */
+// 5) LEGEND
 const legend = L.control({position:'bottomright'});
 legend.onAdd = function(){
   const div = L.DomUtil.create('div','legend');
@@ -138,6 +193,9 @@ legend.onAdd = function(){
   return div;
 };
 legend.addTo(map);
+
+// Initial load
+loadSessions('data/sessions.geojson?nocache=' + Date.now());
 </script>
 </body>
 </html>
