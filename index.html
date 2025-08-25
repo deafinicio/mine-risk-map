@@ -28,14 +28,19 @@
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+
+<!-- ВАЖЛИВО: залежність для TimeDimension -->
+<script src="https://cdn.jsdelivr.net/npm/iso8601-js-period@0.2.1/iso8601.min.js"></script>
+<!-- TimeDimension -->
 <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
+
+<!-- Heatmap -->
 <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script>
 // 1) MAP CORE
-var supportsTD = (typeof L.TimeDimension !== 'undefined');
-
-var map = L.map('map', supportsTD ? {
+var hasTD = (typeof L.TimeDimension !== 'undefined');
+var map = L.map('map', hasTD ? {
   zoomControl: true,
   timeDimension: true,
   timeDimensionControl: true,
@@ -47,36 +52,24 @@ var osm = L.tileLayer(
   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
 );
-
 var carto = L.tileLayer(
   'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
   { maxZoom:20, crossOrigin:true, attribution:'&copy; OpenStreetMap &copy; CARTO' }
 );
-
 var osmde = L.tileLayer(
   'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
   { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
 );
-
-// стартовий шар
 osm.addTo(map);
 
 function fallback(fromLayer, toLayer){
-  function once(){
-    fromLayer.off('tileerror', once);
-    if (map.hasLayer(fromLayer)) { map.removeLayer(fromLayer); }
-    toLayer.addTo(map);
-  }
+  function once(){ fromLayer.off('tileerror', once); if (map.hasLayer(fromLayer)) map.removeLayer(fromLayer); toLayer.addTo(map); }
   fromLayer.on('tileerror', once);
 }
 fallback(osm, carto);
 fallback(carto, osmde);
 
-var baseLayers = {
-  'OpenStreetMap': osm,
-  'Carto Voyager': carto,
-  'OSM.de': osmde
-};
+var baseLayers = { 'OpenStreetMap': osm, 'Carto Voyager': carto, 'OSM.de': osmde };
 
 // 2) CHOROPLETH (суми по громадах)
 function color(v){
@@ -88,29 +81,22 @@ function color(v){
          v > 10   ? '#FEB24C' : '#FFEDA0';
 }
 var choroplethLayer = L.layerGroup();
-
-fetch('data/admin_agg.geojson')
-  .then(function(r){ return r.json(); })
-  .then(function(geo){
-    var layer = L.geoJSON(geo, {
-      style: function(f){
-        var sumVal = 0;
-        if (f.properties && f.properties.sum_participants !== undefined && f.properties.sum_participants !== null) {
-          sumVal = f.properties.sum_participants;
-        }
-        return { weight:1, color:'#999', fillOpacity:0.7, fillColor: color(sumVal || 0) };
-      },
-      onEachFeature: function(f,l){
-        var p = f.properties || {};
-        var sumVal = (p.sum_participants !== undefined && p.sum_participants !== null) ? p.sum_participants : 0;
-        l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
-        l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
-        l.on('mouseout',  function(){ l.setStyle({weight:1, color:'#999'}); });
-      }
-    });
-    choroplethLayer.addLayer(layer);
-  })
-  .catch(console.error);
+fetch('data/admin_agg.geojson').then(function(r){ return r.json(); }).then(function(geo){
+  var layer = L.geoJSON(geo, {
+    style: function(f){
+      var sumVal = (f.properties && f.properties.sum_participants!=null) ? f.properties.sum_participants : 0;
+      return { weight:1, color:'#999', fillOpacity:0.7, fillColor: color(sumVal||0) };
+    },
+    onEachFeature: function(f,l){
+      var p = f.properties || {};
+      var sumVal = (p.sum_participants!=null) ? p.sum_participants : 0;
+      l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
+      l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
+      l.on('mouseout',  function(){ l.setStyle({weight:1, color:'#999'}); });
+    }
+  });
+  choroplethLayer.addLayer(layer);
+}).catch(console.error);
 
 // 3) POINTS: cluster + time + heat
 var clusterLayer = L.markerClusterGroup();
@@ -119,10 +105,9 @@ var heatLayer = null;
 var allSessions = [];
 
 function buildLayers(features){
-  // clear
   clusterLayer.clearLayers();
   timePointsGroup.clearLayers();
-  if (heatLayer) { heatLayer.setLatLngs([]); }
+  if (heatLayer) heatLayer.setLatLngs([]);
 
   var geo = { type:'FeatureCollection', features: features };
 
@@ -135,7 +120,7 @@ function buildLayers(features){
       var locationStr = (p.hromada || '') + (p.rayon ? ', ' + p.rayon : '');
       var aud  = p.audience   || '—';
       var instr= p.instructor || '—';
-      var participantsVal = (p.participants !== undefined && p.participants !== null) ? p.participants : '—';
+      var participantsVal = (p.participants != null) ? p.participants : '—';
       var html = '<b>' + dateStr + '</b><br>' + locationStr + '<br>' +
                  'Аудиторія: ' + aud + '<br>Інструктор: ' + instr + '<br>Осіб: ' + participantsVal;
       layer.bindPopup(html);
@@ -143,11 +128,11 @@ function buildLayers(features){
   });
   clusterLayer.addLayer(markers);
 
-  // time-dimension points
-  if (supportsTD){
+  // time-dimension points (лише якщо є бібліотека)
+  if (hasTD){
     var featuresWithTime = features.map(function(f){
       var copy = JSON.parse(JSON.stringify(f));
-      if (copy.properties) { copy.properties.time = copy.properties.datetime; }
+      if (copy.properties) copy.properties.time = copy.properties.datetime;
       return copy;
     });
     var timeGeo = L.geoJSON(
@@ -163,52 +148,43 @@ function buildLayers(features){
   // heatmap
   if (typeof L.heatLayer !== 'undefined'){
     var heatData = features.map(function(f){
-      var coords = (f.geometry && f.geometry.coordinates);
+      var c = (f.geometry && f.geometry.coordinates);
       var p = f.properties || {};
-      if (!coords) return null;
+      if (!c) return null;
       var partVal = (typeof p.participants === 'number') ? p.participants : 1;
-      var intensity = Math.min(1, partVal / 100); // нормалізація
-      return [coords[1], coords[0], intensity];
-    }).filter(function(x){ return !!x; });
+      var intensity = Math.min(1, partVal / 100);
+      return [c[1], c[0], intensity];
+    }).filter(Boolean);
 
-    if (!heatLayer){
-      heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
-    } else {
-      heatLayer.setLatLngs(heatData);
-    }
+    if (!heatLayer) heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
+    else heatLayer.setLatLngs(heatData);
   }
 }
 
 function loadSessions(url){
-  return fetch(url)
-    .then(function(r){ return r.json(); })
-    .then(function(geo){
-      allSessions = geo.features || [];
-      buildLayers(allSessions);
-    })
-    .catch(console.error);
+  return fetch(url).then(function(r){ return r.json(); }).then(function(geo){
+    allSessions = geo.features || [];
+    buildLayers(allSessions);
+  }).catch(console.error);
 }
 
 function applyFilters(){
-  var searchText = (document.getElementById('search-input').value || '').trim().toLowerCase();
-  var startValue = document.getElementById('start-date').value;
-  var endValue   = document.getElementById('end-date').value;
-
-  var startDate = startValue ? new Date(startValue) : null;
-  var endDate   = endValue   ? new Date(endValue)   : null;
+  var txt = (document.getElementById('search-input').value || '').trim().toLowerCase();
+  var sVal = document.getElementById('start-date').value;
+  var eVal = document.getElementById('end-date').value;
+  var sDate = sVal ? new Date(sVal) : null;
+  var eDate = eVal ? new Date(eVal) : null;
 
   var filtered = allSessions.filter(function(f){
     var p = f.properties || {};
-    var s1 = p.hromada && p.hromada.toLowerCase().includes(searchText);
-    var s2 = p.rayon   && p.rayon.toLowerCase().includes(searchText);
-    var s3 = p.audience&& p.audience.toLowerCase().includes(searchText);
-    var matchSearch = !searchText || s1 || s2 || s3;
-
-    var date = p.datetime ? new Date(p.datetime) : null;
-    var matchStart = !startDate || (date && date >= startDate);
-    var matchEnd   = !endDate   || (date && date <= endDate);
-
-    return matchSearch && matchStart && matchEnd;
+    var matchSearch = !txt ||
+      (p.hromada && p.hromada.toLowerCase().includes(txt)) ||
+      (p.rayon   && p.rayon.toLowerCase().includes(txt)) ||
+      (p.audience&& p.audience.toLowerCase().includes(txt));
+    var d = p.datetime ? new Date(p.datetime) : null;
+    var okS = !sDate || (d && d >= sDate);
+    var okE = !eDate || (d && d <= eDate);
+    return matchSearch && okS && okE;
   });
 
   buildLayers(filtered);
@@ -228,8 +204,6 @@ searchControl.onAdd = function(){
   return div;
 };
 searchControl.addTo(map);
-
-// підписуємо події після вставки DOM
 setTimeout(function(){
   document.getElementById('filter-btn').addEventListener('click', applyFilters);
   document.getElementById('refresh-btn').addEventListener('click', function(){
@@ -237,43 +211,37 @@ setTimeout(function(){
   });
 }, 0);
 
-// 5) Layers control (overlays під’єднаємо після створення)
-var overlays = {
-  'Кластер точок': clusterLayer,
-  'Хороплет громад': choroplethLayer
-};
-if (supportsTD) { overlays['Точки у часі (Time slider)'] = timePointsGroup; }
+// 5) Layers control
+var overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
+if (hasTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
 if (typeof L.heatLayer !== 'undefined') {
-  // проксі-шар, щоб вмикати/вимикати heatLayer
   var proxy = L.layerGroup();
-  proxy.on('add',    function(){ if (heatLayer) heatLayer.addTo(map); });
+  proxy.on('add', function(){ if (heatLayer) heatLayer.addTo(map); });
   proxy.on('remove', function(){ if (heatLayer) map.removeLayer(heatLayer); });
   overlays['Heatmap (щільність)'] = proxy;
 }
 L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
 
-// за замовчуванням увімкнені:
+// за замовчуванням увімкнені
 map.addLayer(clusterLayer);
 map.addLayer(choroplethLayer);
-if (supportsTD) { map.addLayer(timePointsGroup); }
+if (hasTD) map.addLayer(timePointsGroup);
 
-// 6) Legend
+// 6) Легенда
 var legend = L.control({position:'bottomright'});
 legend.onAdd = function(){
   var div = L.DomUtil.create('div','legend');
   var grades = [0,10,50,100,500,1000,5000];
   div.innerHTML += '<b>Осіб за період</b><br>';
-  for (var i=0; i<grades.length; i++){
-    var from = grades[i];
-    var to   = grades[i+1];
-    var c = color(from + 0.1);
+  for (var i=0;i<grades.length;i++){
+    var from=grades[i], to=grades[i+1], c=color(from+0.1);
     div.innerHTML += '<i style="background:'+c+'"></i> '+from+(to?'&ndash;'+to:'+')+'<br>';
   }
   return div;
 };
 legend.addTo(map);
 
-// 7) Initial data load
+// 7) Initial load
 loadSessions('data/sessions.geojson?nocache=' + Date.now());
 </script>
 </body>
