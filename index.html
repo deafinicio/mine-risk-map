@@ -1,46 +1,84 @@
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mine Risk Map — Kharkiv Oblast</title>
+
 <!-- Leaflet CSS -->
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"/>
-<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"/>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <!-- TimeDimension CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css"/>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css" />
+
 <style>
-  html, body { height:100%; margin:0; }
-  #map { height:100vh; }
+  html, body { height: 100%; margin: 0; }
+  #map { height: 100vh; }
   .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
   .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
   .search-control { background:#fff; padding:8px 10px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-  .search-control input, .search-control button { display:block; margin-bottom:4px; width:100%; padding:4px; border:1px solid #ccc; border-radius:4px; }
+  .search-control input, .search-control button, .search-control label { display:block; margin-bottom:6px; width:100%; }
+  .search-control input, .search-control button { padding:6px; border:1px solid #ccc; border-radius:4px; }
 </style>
 </head>
 <body>
 <div id="map"></div>
+
 <!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
 <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+
 <script>
 // 1) MAP CORE
-const supportsTD = typeof L.TimeDimension !== 'undefined';
-const map = L.map('map', supportsTD ? {
+var supportsTD = (typeof L.TimeDimension !== 'undefined');
+
+var map = L.map('map', supportsTD ? {
   zoomControl: true,
   timeDimension: true,
   timeDimensionControl: true,
   timeDimensionOptions: { timeInterval: "2022-06-01/2026-12-31", period: "P1M" }
 } : { zoomControl:true }).setView([49.9935, 36.2304], 8);
 
-const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxZoom: 19, attribution: '&copy; OpenStreetMap'
-}).addTo(map);
-const baseLayers = { 'OpenStreetMap': osm };
+// --- Base layers (з фолбеком) ---
+var osm = L.tileLayer(
+  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+  { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
+);
 
-// 2) CHOROPLETH
+var carto = L.tileLayer(
+  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
+  { maxZoom:20, crossOrigin:true, attribution:'&copy; OpenStreetMap &copy; CARTO' }
+);
+
+var osmde = L.tileLayer(
+  'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
+  { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
+);
+
+// стартовий шар
+osm.addTo(map);
+
+function fallback(fromLayer, toLayer){
+  function once(){
+    fromLayer.off('tileerror', once);
+    if (map.hasLayer(fromLayer)) { map.removeLayer(fromLayer); }
+    toLayer.addTo(map);
+  }
+  fromLayer.on('tileerror', once);
+}
+fallback(osm, carto);
+fallback(carto, osmde);
+
+var baseLayers = {
+  'OpenStreetMap': osm,
+  'Carto Voyager': carto,
+  'OSM.de': osmde
+};
+
+// 2) CHOROPLETH (суми по громадах)
 function color(v){
   return v > 5000 ? '#800026' :
          v > 1000 ? '#BD0026' :
@@ -49,79 +87,91 @@ function color(v){
          v > 50   ? '#FD8D3C' :
          v > 10   ? '#FEB24C' : '#FFEDA0';
 }
-const choroplethLayer = L.layerGroup().addTo(map);
-fetch('data/admin_agg.geojson').then(r=>r.json()).then(geo=>{
-  const layer = L.geoJSON(geo, {
-    style: function(f) {
-      var sumVal = 0;
-      if (f.properties && f.properties.sum_participants !== undefined && f.properties.sum_participants !== null) {
-        sumVal = f.properties.sum_participants;
+var choroplethLayer = L.layerGroup();
+
+fetch('data/admin_agg.geojson')
+  .then(function(r){ return r.json(); })
+  .then(function(geo){
+    var layer = L.geoJSON(geo, {
+      style: function(f){
+        var sumVal = 0;
+        if (f.properties && f.properties.sum_participants !== undefined && f.properties.sum_participants !== null) {
+          sumVal = f.properties.sum_participants;
+        }
+        return { weight:1, color:'#999', fillOpacity:0.7, fillColor: color(sumVal || 0) };
+      },
+      onEachFeature: function(f,l){
+        var p = f.properties || {};
+        var sumVal = (p.sum_participants !== undefined && p.sum_participants !== null) ? p.sum_participants : 0;
+        l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
+        l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
+        l.on('mouseout',  function(){ l.setStyle({weight:1, color:'#999'}); });
       }
-      return { weight:1, color:'#999', fillOpacity:0.7, fillColor: color(sumVal || 0) };
-    },
-    onEachFeature: function(f,l){
-      var p = f.properties || {};
-      var sumVal = (p.sum_participants !== undefined && p.sum_participants !== null) ? p.sum_participants : 0;
-      l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
-      l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
-      l.on('mouseout', function(){ l.setStyle({weight:1, color:'#999'}); });
-    }
-  });
-  choroplethLayer.addLayer(layer);
-}).catch(console.error);
+    });
+    choroplethLayer.addLayer(layer);
+  })
+  .catch(console.error);
 
 // 3) POINTS: cluster + time + heat
-const clusterLayer = L.markerClusterGroup();
-const timePointsGroup = L.layerGroup();
-let heatLayer = null;
-let allSessions = [];
+var clusterLayer = L.markerClusterGroup();
+var timePointsGroup = L.layerGroup();
+var heatLayer = null;
+var allSessions = [];
 
-function buildLayers(features) {
-  // Clear old
+function buildLayers(features){
+  // clear
   clusterLayer.clearLayers();
   timePointsGroup.clearLayers();
-  if (heatLayer) {
-    heatLayer.setLatLngs([]);
-  }
-  const geo = { type:'FeatureCollection', features: features };
-  // markers for cluster
-  const markers = L.geoJSON(geo, {
-    pointToLayer: (f,latlng) => L.marker(latlng),
-    onEachFeature: (f, layer) => {
-      const p=f.properties||{};
+  if (heatLayer) { heatLayer.setLatLngs([]); }
+
+  var geo = { type:'FeatureCollection', features: features };
+
+  // markers (clusters)
+  var markers = L.geoJSON(geo, {
+    pointToLayer: function(f, latlng){ return L.marker(latlng); },
+    onEachFeature: function(f, layer){
+      var p = f.properties || {};
       var dateStr = p.datetime || '—';
       var locationStr = (p.hromada || '') + (p.rayon ? ', ' + p.rayon : '');
-      var aud = p.audience || '—';
-      var instr = p.instructor || '—';
+      var aud  = p.audience   || '—';
+      var instr= p.instructor || '—';
       var participantsVal = (p.participants !== undefined && p.participants !== null) ? p.participants : '—';
-      var popupHtml = '<b>' + dateStr + '</b><br>' + locationStr + '<br>' +
-        'Аудиторія: ' + aud + '<br>Інструктор: ' + instr + '<br>Осіб: ' + participantsVal;
-      layer.bindPopup(popupHtml);
+      var html = '<b>' + dateStr + '</b><br>' + locationStr + '<br>' +
+                 'Аудиторія: ' + aud + '<br>Інструктор: ' + instr + '<br>Осіб: ' + participantsVal;
+      layer.bindPopup(html);
     }
   });
   clusterLayer.addLayer(markers);
-  // time
-  if (supportsTD) {
-    const featuresWithTime = features.map(f => {
-      const copy = JSON.parse(JSON.stringify(f));
-      if (copy.properties) copy.properties.time = copy.properties.datetime;
+
+  // time-dimension points
+  if (supportsTD){
+    var featuresWithTime = features.map(function(f){
+      var copy = JSON.parse(JSON.stringify(f));
+      if (copy.properties) { copy.properties.time = copy.properties.datetime; }
       return copy;
     });
-    const timeGeo = L.geoJSON({type:'FeatureCollection', features: featuresWithTime}, { pointToLayer: (f,latlng) => L.circleMarker(latlng,{radius:6,color:'#0a84ff',fillColor:'#0a84ff',fillOpacity:.8}) });
-    const td = L.timeDimension.layer.geoJson(timeGeo, { updateTimeDimension:true, addlastPoint:false, duration:'P15D', waitForReady:true });
+    var timeGeo = L.geoJSON(
+      { type:'FeatureCollection', features: featuresWithTime },
+      { pointToLayer: function(f,latlng){ return L.circleMarker(latlng,{radius:6,color:'#0a84ff',fillColor:'#0a84ff',fillOpacity:.8}); } }
+    );
+    var td = L.timeDimension.layer.geoJson(timeGeo, {
+      updateTimeDimension:true, addlastPoint:false, duration:'P15D', waitForReady:true
+    });
     timePointsGroup.addLayer(td);
   }
-  // heat
-  if (typeof L.heatLayer !== 'undefined') {
-    const heatData = features.map(function(f) {
+
+  // heatmap
+  if (typeof L.heatLayer !== 'undefined'){
+    var heatData = features.map(function(f){
       var coords = (f.geometry && f.geometry.coordinates);
       var p = f.properties || {};
       if (!coords) return null;
       var partVal = (typeof p.participants === 'number') ? p.participants : 1;
-      var intensity = Math.min(1, partVal / 100);
+      var intensity = Math.min(1, partVal / 100); // нормалізація
       return [coords[1], coords[0], intensity];
-    }).filter(Boolean);
-    if (!heatLayer) {
+    }).filter(function(x){ return !!x; });
+
+    if (!heatLayer){
       heatLayer = L.heatLayer(heatData, { radius:25, blur:15, maxZoom:12 });
     } else {
       heatLayer.setLatLngs(heatData);
@@ -129,85 +179,101 @@ function buildLayers(features) {
   }
 }
 
-function loadSessions(url) {
-  return fetch(url).then(r=>r.json()).then(geo => {
-    allSessions = geo.features;
-    buildLayers(allSessions);
-  }).catch(console.error);
+function loadSessions(url){
+  return fetch(url)
+    .then(function(r){ return r.json(); })
+    .then(function(geo){
+      allSessions = geo.features || [];
+      buildLayers(allSessions);
+    })
+    .catch(console.error);
 }
 
-function applyFilters() {
-  const searchText = document.getElementById('search-input').value.trim().toLowerCase();
-  const startValue = document.getElementById('start-date').value;
-  const endValue = document.getElementById('end-date').value;
-  const startDate = startValue ? new Date(startValue) : null;
-  const endDate = endValue ? new Date(endValue) : null;
-  const filtered = allSessions.filter(f => {
-    const p = f.properties || {};
-    const matchSearch = !searchText || (p.hromada && p.hromada.toLowerCase().includes(searchText)) || (p.rayon && p.rayon.toLowerCase().includes(searchText)) || (p.audience && p.audience.toLowerCase().includes(searchText));
-    const date = new Date(p.datetime);
-    const matchStart = !startDate || date >= startDate;
-    const matchEnd = !endDate || date <= endDate;
+function applyFilters(){
+  var searchText = (document.getElementById('search-input').value || '').trim().toLowerCase();
+  var startValue = document.getElementById('start-date').value;
+  var endValue   = document.getElementById('end-date').value;
+
+  var startDate = startValue ? new Date(startValue) : null;
+  var endDate   = endValue   ? new Date(endValue)   : null;
+
+  var filtered = allSessions.filter(function(f){
+    var p = f.properties || {};
+    var s1 = p.hromada && p.hromada.toLowerCase().includes(searchText);
+    var s2 = p.rayon   && p.rayon.toLowerCase().includes(searchText);
+    var s3 = p.audience&& p.audience.toLowerCase().includes(searchText);
+    var matchSearch = !searchText || s1 || s2 || s3;
+
+    var date = p.datetime ? new Date(p.datetime) : null;
+    var matchStart = !startDate || (date && date >= startDate);
+    var matchEnd   = !endDate   || (date && date <= endDate);
+
     return matchSearch && matchStart && matchEnd;
   });
+
   buildLayers(filtered);
 }
 
-// Search control UI
-const searchControl = L.control({ position:'topright' });
+// 4) Search/Filter control
+var searchControl = L.control({ position:'topright' });
 searchControl.onAdd = function(){
-  const div = L.DomUtil.create('div','search-control');
-  div.innerHTML = `
-    <input type="text" id="search-input" placeholder="Пошук..." title="Пошук по назві громади, району або аудиторії" />
-    <label>Від: <input type="date" id="start-date" /></label>
-    <label>До: <input type="date" id="end-date" /></label>
-    <button id="filter-btn" style="cursor:pointer;">Фільтрувати</button>
-    <button id="refresh-btn" style="cursor:pointer;">Оновити дані</button>
-  `;
+  var div = L.DomUtil.create('div','search-control');
+  div.innerHTML =
+    '<input type="text" id="search-input" placeholder="Пошук по громаді/району/аудиторії" />' +
+    '<label>Від: <input type="date" id="start-date" /></label>' +
+    '<label>До: <input type="date" id="end-date" /></label>' +
+    '<button id="filter-btn" style="cursor:pointer;">Фільтрувати</button>' +
+    '<button id="refresh-btn" style="cursor:pointer;">Оновити дані</button>';
   L.DomEvent.disableClickPropagation(div);
   return div;
 };
 searchControl.addTo(map);
 
-// Event listeners
-setTimeout(() => {
+// підписуємо події після вставки DOM
+setTimeout(function(){
   document.getElementById('filter-btn').addEventListener('click', applyFilters);
-  document.getElementById('refresh-btn').addEventListener('click', () => {
+  document.getElementById('refresh-btn').addEventListener('click', function(){
     loadSessions('data/sessions.geojson?nocache=' + Date.now()).then(applyFilters);
   });
 }, 0);
 
-// 4) LAYERS CONTROL
-const overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
-if (supportsTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
+// 5) Layers control (overlays під’єднаємо після створення)
+var overlays = {
+  'Кластер точок': clusterLayer,
+  'Хороплет громад': choroplethLayer
+};
+if (supportsTD) { overlays['Точки у часі (Time slider)'] = timePointsGroup; }
 if (typeof L.heatLayer !== 'undefined') {
-  const proxy = L.layerGroup();
-  proxy.on('add', ()=>{ heatLayer && heatLayer.addTo(map); });
-  proxy.on('remove', ()=>{ heatLayer && map.removeLayer(heatLayer); });
+  // проксі-шар, щоб вмикати/вимикати heatLayer
+  var proxy = L.layerGroup();
+  proxy.on('add',    function(){ if (heatLayer) heatLayer.addTo(map); });
+  proxy.on('remove', function(){ if (heatLayer) map.removeLayer(heatLayer); });
   overlays['Heatmap (щільність)'] = proxy;
 }
-L.control.layers(baseLayers, overlays, {collapsed:false}).addTo(map);
+L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
 
-// default layers
+// за замовчуванням увімкнені:
 map.addLayer(clusterLayer);
 map.addLayer(choroplethLayer);
-if (supportsTD) map.addLayer(timePointsGroup);
+if (supportsTD) { map.addLayer(timePointsGroup); }
 
-// 5) LEGEND
-const legend = L.control({position:'bottomright'});
+// 6) Legend
+var legend = L.control({position:'bottomright'});
 legend.onAdd = function(){
-  const div = L.DomUtil.create('div','legend');
-  const grades=[0,10,50,100,500,1000,5000];
-  div.innerHTML+='<b>Осіб за період</b><br>';
-  for(let i=0;i<grades.length;i++){
-    const from=grades[i], to=grades[i+1], c=color(from+0.1);
-    div.innerHTML += `<i style="background:${c}"></i> ${from}${to?'&ndash;'+to:'+'}<br>`;
+  var div = L.DomUtil.create('div','legend');
+  var grades = [0,10,50,100,500,1000,5000];
+  div.innerHTML += '<b>Осіб за період</b><br>';
+  for (var i=0; i<grades.length; i++){
+    var from = grades[i];
+    var to   = grades[i+1];
+    var c = color(from + 0.1);
+    div.innerHTML += '<i style="background:'+c+'"></i> '+from+(to?'&ndash;'+to:'+')+'<br>';
   }
   return div;
 };
 legend.addTo(map);
 
-// Initial load
+// 7) Initial data load
 loadSessions('data/sessions.geojson?nocache=' + Date.now());
 </script>
 </body>
