@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mine Risk Map — Kharkiv Oblast</title>
+<title>Mine Risk Heatmap — Kharkiv Oblast</title>
 
 <!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
@@ -46,6 +46,8 @@ var map = L.map('map', hasTD ? {
   timeDimensionControl: true,
   timeDimensionOptions: { timeInterval: "2022-06-01/2026-12-31", period: "P1M" }
 } : { zoomControl:true }).setView([49.9935, 36.2304], 8);
+var kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
+map.fitBounds(kharkivBounds);
 
 // --- Base layers (з фолбеком) ---
 var osm = L.tileLayer(
@@ -90,7 +92,7 @@ fetch('data/admin_agg.geojson').then(function(r){ return r.json(); }).then(funct
     onEachFeature: function(f,l){
       var p = f.properties || {};
       var sumVal = (p.sum_participants!=null) ? p.sum_participants : 0;
-      l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal);
+      l.bindPopup('<b>' + (p.hromada || 'Громада') + '</b><br>Осіб за період: ' + sumVal + '<br><small>Демо-полігон</small>');
       l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
       l.on('mouseout',  function(){ l.setStyle({weight:1, color:'#999'}); });
     }
@@ -152,7 +154,7 @@ function buildLayers(features){
       var p = f.properties || {};
       if (!c) return null;
       var partVal = (typeof p.participants === 'number') ? p.participants : 1;
-      var intensity = Math.min(1, partVal / 100);
+      var intensity = Math.min(1, partVal / 60);
       return [c[1], c[0], intensity];
     }).filter(Boolean);
 
@@ -172,8 +174,8 @@ function applyFilters(){
   var txt = (document.getElementById('search-input').value || '').trim().toLowerCase();
   var sVal = document.getElementById('start-date').value;
   var eVal = document.getElementById('end-date').value;
-  var sDate = sVal ? new Date(sVal) : null;
-  var eDate = eVal ? new Date(eVal) : null;
+  var sDate = sVal ? new Date(sVal + 'T00:00:00') : null;
+  var eDate = eVal ? new Date(eVal + 'T23:59:59.999') : null;
 
   var filtered = allSessions.filter(function(f){
     var p = f.properties || {};
@@ -182,9 +184,10 @@ function applyFilters(){
       (p.rayon   && p.rayon.toLowerCase().includes(txt)) ||
       (p.audience&& p.audience.toLowerCase().includes(txt));
     var d = p.datetime ? new Date(p.datetime) : null;
+    var validDate = d && !isNaN(d.getTime());
     var okS = !sDate || (d && d >= sDate);
     var okE = !eDate || (d && d <= eDate);
-    return matchSearch && okS && okE;
+    return matchSearch && (!p.datetime || validDate) && okS && okE;
   });
 
   buildLayers(filtered);
@@ -212,19 +215,20 @@ setTimeout(function(){
 }, 0);
 
 // 5) Layers control
-var overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
+var overlays = { 'Кластер точок': clusterLayer, 'Демо-полігони громад': choroplethLayer };
 if (hasTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
 if (typeof L.heatLayer !== 'undefined') {
   var proxy = L.layerGroup();
   proxy.on('add', function(){ if (heatLayer) heatLayer.addTo(map); });
   proxy.on('remove', function(){ if (heatLayer) map.removeLayer(heatLayer); });
-  overlays['Heatmap (щільність)'] = proxy;
+  overlays['Heatmap Харківщини (бенефіціари)'] = proxy;
+  map.addLayer(proxy);
 }
 L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
 
 // за замовчуванням увімкнені
 map.addLayer(clusterLayer);
-map.addLayer(choroplethLayer);
+// Полігони залишені лише як демо-шар, за замовчуванням вимкнені.
 if (hasTD) map.addLayer(timePointsGroup);
 
 // 6) Легенда

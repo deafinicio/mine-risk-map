@@ -7,6 +7,8 @@ const map = L.map('map', supportsTD ? {
   timeDimensionControl: true,
   timeDimensionOptions: { timeInterval: "2022-06-01/2026-12-31", period: "P1M" }
 } : { zoomControl:true }).setView([49.9935, 36.2304], 8);
+const kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
+map.fitBounds(kharkivBounds);
 
 const osm = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
   maxZoom: 19, attribution: '&copy; OpenStreetMap'
@@ -28,7 +30,7 @@ fetch('data/admin_agg.geojson').then(r=>r.json()).then(geo=>{
     style: f => ({ weight:1, color:'#999', fillOpacity:.7, fillColor: color((f.properties?.sum_participants)||0) }),
     onEachFeature: (f,l)=>{
       const p=f.properties||{};
-      l.bindPopup(`<b>${p.hromada||'Громада'}</b><br>Осіб за період: ${p.sum_participants??0}`);
+      l.bindPopup(`<b>${p.hromada||'Громада'}</b><br>Осіб за період: ${p.sum_participants??0}<br><small>Демо-полігон</small>`);
       l.on('mouseover', ()=>l.setStyle({weight:2,color:'#555'}));
       l.on('mouseout', ()=>l.setStyle({weight:1,color:'#999'}));
     }
@@ -78,7 +80,7 @@ function buildLayers(features) {
     const heatData = features.map(f => {
       const c=f.geometry?.coordinates, p=f.properties||{};
       if(!c) return null;
-      const intensity = Math.min(1, (p.participants||1)/100);
+      const intensity = Math.min(1, (p.participants||1)/60);
       return [c[1], c[0], intensity];
     }).filter(Boolean);
     if (!heatLayer) {
@@ -100,15 +102,16 @@ function applyFilters() {
   const searchText = document.getElementById('search-input').value.trim().toLowerCase();
   const startValue = document.getElementById('start-date').value;
   const endValue = document.getElementById('end-date').value;
-  const startDate = startValue ? new Date(startValue) : null;
-  const endDate = endValue ? new Date(endValue) : null;
+  const startDate = startValue ? new Date(startValue + 'T00:00:00') : null;
+  const endDate = endValue ? new Date(endValue + 'T23:59:59.999') : null;
   const filtered = allSessions.filter(f => {
     const p = f.properties || {};
     const matchSearch = !searchText || (p.hromada && p.hromada.toLowerCase().includes(searchText)) || (p.rayon && p.rayon.toLowerCase().includes(searchText)) || (p.audience && p.audience.toLowerCase().includes(searchText));
-    const date = new Date(p.datetime);
-    const matchStart = !startDate || date >= startDate;
-    const matchEnd = !endDate || date <= endDate;
-    return matchSearch && matchStart && matchEnd;
+    const date = p.datetime ? new Date(p.datetime) : null;
+    const validDate = date && !Number.isNaN(date.getTime());
+    const matchStart = !startDate || (date && date >= startDate);
+    const matchEnd = !endDate || (date && date <= endDate);
+    return matchSearch && (!p.datetime || validDate) && matchStart && matchEnd;
   });
   buildLayers(filtered);
 }
@@ -138,19 +141,20 @@ setTimeout(() => {
 }, 0);
 
 // 4) LAYERS CONTROL
-const overlays = { 'Кластер точок': clusterLayer, 'Хороплет громад': choroplethLayer };
+const overlays = { 'Кластер точок': clusterLayer, 'Демо-полігони громад': choroplethLayer };
 if (supportsTD) overlays['Точки у часі (Time slider)'] = timePointsGroup;
 if (typeof L.heatLayer !== 'undefined') {
   const proxy = L.layerGroup();
   proxy.on('add', ()=>{ heatLayer && heatLayer.addTo(map); });
   proxy.on('remove', ()=>{ heatLayer && map.removeLayer(heatLayer); });
-  overlays['Heatmap (щільність)'] = proxy;
+  overlays['Heatmap Харківщини (бенефіціари)'] = proxy;
+  map.addLayer(proxy);
 }
 L.control.layers(baseLayers, overlays, {collapsed:false}).addTo(map);
 
 // default layers
 map.addLayer(clusterLayer);
-map.addLayer(choroplethLayer);
+// Полігони залишені лише як демо-шар, за замовчуванням вимкнені.
 if (supportsTD) map.addLayer(timePointsGroup);
 
 // 5) LEGEND
