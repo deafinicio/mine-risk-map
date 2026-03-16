@@ -282,16 +282,23 @@ function buildLayers(features){
     return [c[1], c[0], intensity];
   }).filter(Boolean);
 
-  if (!heatLayer) {
-    heatLayer = L.heatLayer(heatData, {
-      radius: 32,
-      blur: 24,
-      maxZoom: 12,
-      minOpacity: 0.35
-    });
-  } else {
-    heatLayer.setLatLngs(heatData);
-  }
+if (!heatLayer) {
+  heatLayer = L.heatLayer(heatData, {
+    radius: 42,
+    blur: 32,
+    maxZoom: 12,
+    minOpacity: 0.22,
+    gradient: {
+      0.15: "#5b6cff",
+      0.35: "#4fc3ff",
+      0.55: "#51ff7a",
+      0.75: "#ffe45c",
+      1.0: "#ff4d3a"
+    }
+  });
+} else {
+  heatLayer.setLatLngs(heatData);
+}
 
   if (map.hasLayer(heatProxy)) {
     if (!map.hasLayer(heatLayer)) {
@@ -486,8 +493,7 @@ heatProxy.on('remove', function(){
 
 var overlays = {
   'Кластер точок': clusterLayer,
-  'Heatmap всієї області': heatProxy,
-  'Демо-полігони громад': choroplethLayer
+  'Heatmap всієї області': heatProxy
 };
 
 L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
@@ -496,23 +502,6 @@ L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
 map.addLayer(clusterLayer);
 map.addLayer(heatProxy);
 
-// ===== LEGEND =====
-var legend = L.control({position:'bottomright'});
-legend.onAdd = function(){
-  var div = L.DomUtil.create('div','legend');
-  var grades = [0,10,50,100,500,1000,5000];
-  div.innerHTML += '<b>Осіб за період</b><br>';
-
-  for (var i=0;i<grades.length;i++){
-    var from = grades[i];
-    var to = grades[i+1];
-    var c = color(from + 0.1);
-
-    div.innerHTML += '<i style="background:'+c+'"></i> '+from+(to?'&ndash;'+to:'+')+'<br>';
-  }
-  return div;
-};
-legend.addTo(map);
 
 // ===== INIT =====
 loadLiveSessions();
