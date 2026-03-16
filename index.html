@@ -274,31 +274,29 @@ if (typeof L.heatLayer !== 'undefined') {
     var participants = safeNumber(p.participants_total);
 
     // М'якша нормалізація, щоб середні значення теж були помітні
-    var intensity = Math.sqrt(participants / maxParticipants);
-
-    // Мінімальна видимість для слабших точок
-    intensity = Math.max(0.22, Math.min(1, intensity));
-
+  var intensity = Math.pow(participants / maxParticipants, 0.42);
+intensity = Math.max(0.10, Math.min(1, intensity));
     return [c[1], c[0], intensity];
   }).filter(Boolean);
 
-  if (!heatLayer) {
-    heatLayer = L.heatLayer(heatData, {
-      radius: 38,
-      blur: 32,
-      maxZoom: 12,
-      minOpacity: 0.32,
-      gradient: {
-        0.20: "#5b6cff",
-        0.40: "#4fc3ff",
-        0.60: "#51ff7a",
-        0.78: "#ffe45c",
-        1.00: "#ff3b30"
-      }
-    });
-  } else {
-    heatLayer.setLatLngs(heatData);
-  }
+if (!heatLayer) {
+  heatLayer = L.heatLayer(heatData, {
+    radius: 40,
+    blur: 36,
+    maxZoom: 12,
+    minOpacity: 0.30,
+    gradient: {
+      0.08: "#6a00ff",
+      0.22: "#5b3dff",
+      0.40: "#3fb8ff",
+      0.60: "#4dff88",
+      0.80: "#ffe14a",
+      1.00: "#ff3b30"
+    }
+  });
+} else {
+  heatLayer.setLatLngs(heatData);
+}
 
   if (map.hasLayer(heatProxy)) {
     if (!map.hasLayer(heatLayer)) {
