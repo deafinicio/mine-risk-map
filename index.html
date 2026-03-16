@@ -254,7 +254,7 @@ function buildLayers(features){
 
   clusterLayer.addLayer(markers);
 
-  if (typeof L.heatLayer !== 'undefined') {
+if (typeof L.heatLayer !== 'undefined') {
   var maxParticipants = 0;
 
   features.forEach(function(f) {
@@ -273,22 +273,33 @@ function buildLayers(features){
 
     var participants = safeNumber(p.participants_total);
 
-    // динамічна нормалізація по вибірці
-var intensity = participants / maxParticipants;
-intensity = Math.max(0.15, Math.min(1, intensity));
+    // М'якша нормалізація, щоб середні значення теж були помітні
+    var intensity = Math.sqrt(participants / maxParticipants);
+
+    // Мінімальна видимість для слабших точок
+    intensity = Math.max(0.22, Math.min(1, intensity));
+
     return [c[1], c[0], intensity];
   }).filter(Boolean);
 
-if (!heatLayer) {
-  heatLayer = L.heatLayer(heatData, {
-    radius: 15,
-    blur: 30,
-    maxZoom: 12,
-    minOpacity: 0.45
-  });
-} else {
-  heatLayer.setLatLngs(heatData);
-}
+  if (!heatLayer) {
+    heatLayer = L.heatLayer(heatData, {
+      radius: 38,
+      blur: 32,
+      maxZoom: 12,
+      minOpacity: 0.32,
+      gradient: {
+        0.20: "#5b6cff",
+        0.40: "#4fc3ff",
+        0.60: "#51ff7a",
+        0.78: "#ffe45c",
+        1.00: "#ff3b30"
+      }
+    });
+  } else {
+    heatLayer.setLatLngs(heatData);
+  }
+
   if (map.hasLayer(heatProxy)) {
     if (!map.hasLayer(heatLayer)) {
       heatLayer.addTo(map);
