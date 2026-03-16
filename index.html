@@ -254,33 +254,51 @@ function buildLayers(features){
 
   clusterLayer.addLayer(markers);
 
-  if (typeof L.heatLayer !== 'undefined'){
-    var heatData = features.map(function(f){
-      var c = f.geometry && f.geometry.coordinates;
-      var p = f.properties || {};
+  if (typeof L.heatLayer !== 'undefined') {
+  var maxParticipants = 0;
 
-      if (!c) return null;
+  features.forEach(function(f) {
+    var p = f.properties || {};
+    var val = safeNumber(p.participants_total);
+    if (val > maxParticipants) maxParticipants = val;
+  });
 
-      var intensity = Math.min(1, safeNumber(p.participants_total) / 60);
-      return [c[1], c[0], intensity];
-    }).filter(Boolean);
+  if (maxParticipants <= 0) maxParticipants = 1;
 
-    if (!heatLayer) {
-      heatLayer = L.heatLayer(heatData, {
-        radius: 25,
-        blur: 15,
-        maxZoom: 12
-      });
-    } else {
-      heatLayer.setLatLngs(heatData);
-    }
+  var heatData = features.map(function(f) {
+    var c = f.geometry && f.geometry.coordinates;
+    var p = f.properties || {};
 
-    if (map.hasLayer(heatProxy)) {
-      if (!map.hasLayer(heatLayer)) {
-        heatLayer.addTo(map);
-      }
+    if (!c) return null;
+
+    var participants = safeNumber(p.participants_total);
+
+    // динамічна нормалізація по вибірці
+    var intensity = participants / maxParticipants;
+
+    // мінімальна видимість для дуже малих значень
+    intensity = Math.max(0.15, Math.min(1, intensity));
+
+    return [c[1], c[0], intensity];
+  }).filter(Boolean);
+
+  if (!heatLayer) {
+    heatLayer = L.heatLayer(heatData, {
+      radius: 32,
+      blur: 24,
+      maxZoom: 12,
+      minOpacity: 0.35
+    });
+  } else {
+    heatLayer.setLatLngs(heatData);
+  }
+
+  if (map.hasLayer(heatProxy)) {
+    if (!map.hasLayer(heatLayer)) {
+      heatLayer.addTo(map);
     }
   }
+}
 }
 
 function populateFilterOptions(features) {
