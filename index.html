@@ -9,8 +9,6 @@
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
-<!-- TimeDimension CSS -->
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.control.min.css" />
 
 <style>
   html, body { height: 100%; margin: 0; }
@@ -29,22 +27,17 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 
-<!-- ВАЖЛИВО: залежність для TimeDimension -->
-<script src="https://cdn.jsdelivr.net/npm/iso8601-js-period@0.2.1/iso8601.min.js"></script>
-<!-- TimeDimension -->
-<script src="https://cdn.jsdelivr.net/npm/leaflet-timedimension@1.1.0/dist/leaflet.timedimension.min.js"></script>
-
 <!-- Heatmap -->
 <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script>
-// ====== CONFIG ======
+// ===== CONFIG =====
 const APPS_SCRIPT_DATA_URL =
   "https://script.google.com/macros/s/AKfycbyiDID7u07n2C8rDc_DIfYYVn6OS-0FaAoLCpNl3jDyi7A2bpZiKJfj62TiwYLvjsWFvw/exec";
 
 const SETTLEMENTS_GEOJSON_URL = "data/kharkiv_settlements_points.geojson";
 
-// ====== HELPERS ======
+// ===== HELPERS =====
 function normalizeText(value) {
   return String(value || "")
     .trim()
@@ -66,38 +59,19 @@ function safeNumber(value) {
   return Number.isFinite(n) ? n : 0;
 }
 
-function toIsoDate(value) {
+function parseDate(value) {
   if (!value) return null;
-
-  // якщо вже ISO
-  const parsed = new Date(value);
-  if (!isNaN(parsed.getTime())) return parsed.toISOString();
-
-  // якщо формат YYYY-MM-DD
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value))) {
-    return new Date(value + "T00:00:00").toISOString();
-  }
-
-  return null;
+  const d = new Date(value);
+  return isNaN(d.getTime()) ? null : d;
 }
 
-// ====== 1) MAP CORE ======
-var hasTD = (typeof L.TimeDimension !== 'undefined');
-
-var map = L.map('map', hasTD ? {
-  zoomControl: true,
-  timeDimension: true,
-  timeDimensionControl: true,
-  timeDimensionOptions: {
-    timeInterval: "2022-06-01/2026-12-31",
-    period: "P1M"
-  }
-} : { zoomControl:true }).setView([49.9935, 36.2304], 8);
+// ===== MAP =====
+var map = L.map('map', { zoomControl: true }).setView([49.9935, 36.2304], 8);
 
 var kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
 map.fitBounds(kharkivBounds);
 
-// ====== BASE LAYERS ======
+// ===== BASEMAPS =====
 var osm = L.tileLayer(
   'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
   { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
@@ -132,7 +106,7 @@ var baseLayers = {
   'OSM.de': osmde
 };
 
-// ====== 2) CHOROPLETH (демо-шар поки залишаємо) ======
+// ===== DEMO CHOROPLETH =====
 function color(v){
   return v > 5000 ? '#800026' :
          v > 1000 ? '#BD0026' :
@@ -168,21 +142,20 @@ fetch('data/admin_agg.geojson')
           'Осіб за період: ' + sumVal +
           '<br><small>Демо-полігон</small>'
         );
-        l.on('mouseover', function(){ l.setStyle({weight:2, color:'#555'}); });
-        l.on('mouseout',  function(){ l.setStyle({weight:1, color:'#999'}); });
       }
     });
     choroplethLayer.addLayer(layer);
   })
   .catch(console.error);
 
-// ====== 3) LIVE POINTS ======
+// ===== LIVE DATA =====
 var clusterLayer = L.markerClusterGroup();
-var timePointsGroup = L.layerGroup();
 var heatLayer = null;
+var heatProxy = L.layerGroup();
 
 var allSessions = [];
 var settlementsLookup = new Map();
+var liveRows = [];
 
 function buildSettlementsLookup(settlementsGeo) {
   settlementsLookup.clear();
@@ -219,7 +192,6 @@ function convertRowsToFeatures(rows) {
     const participantsTotal = safeNumber(row.participants_total);
     const participantsU18 = safeNumber(row.participants_u18);
     const participants18Plus = safeNumber(row.participants_18plus);
-    const datetimeIso = toIsoDate(row.session_date) || toIsoDate(row.created_at);
 
     features.push({
       type: "Feature",
@@ -229,7 +201,6 @@ function convertRowsToFeatures(rows) {
       },
       properties: {
         created_at: row.created_at || "",
-        datetime: datetimeIso || "",
         session_date: row.session_date || "",
         raion: row.raion || "",
         hromada: row.hromada || "",
@@ -249,7 +220,6 @@ function convertRowsToFeatures(rows) {
 
 function buildLayers(features){
   clusterLayer.clearLayers();
-  timePointsGroup.clearLayers();
 
   if (heatLayer) {
     heatLayer.setLatLngs([]);
@@ -257,7 +227,6 @@ function buildLayers(features){
 
   var geo = { type:'FeatureCollection', features: features };
 
-  // MARKERS / CLUSTER
   var markers = L.geoJSON(geo, {
     pointToLayer: function(f, latlng){
       return L.marker(latlng);
@@ -285,41 +254,6 @@ function buildLayers(features){
 
   clusterLayer.addLayer(markers);
 
-  // TIME DIMENSION
-  if (hasTD){
-    var featuresWithTime = features
-      .filter(function(f){ return f.properties && f.properties.datetime; })
-      .map(function(f){
-        var copy = JSON.parse(JSON.stringify(f));
-        copy.properties.time = copy.properties.datetime;
-        return copy;
-      });
-
-    var timeGeo = L.geoJSON(
-      { type:'FeatureCollection', features: featuresWithTime },
-      {
-        pointToLayer: function(f, latlng){
-          return L.circleMarker(latlng, {
-            radius: 6,
-            color: '#0a84ff',
-            fillColor: '#0a84ff',
-            fillOpacity: 0.8
-          });
-        }
-      }
-    );
-
-    var td = L.timeDimension.layer.geoJson(timeGeo, {
-      updateTimeDimension: true,
-      addlastPoint: false,
-      duration: 'P15D',
-      waitForReady: true
-    });
-
-    timePointsGroup.addLayer(td);
-  }
-
-  // HEATMAP
   if (typeof L.heatLayer !== 'undefined'){
     var heatData = features.map(function(f){
       var c = f.geometry && f.geometry.coordinates;
@@ -340,13 +274,61 @@ function buildLayers(features){
     } else {
       heatLayer.setLatLngs(heatData);
     }
+
+    if (map.hasLayer(heatProxy)) {
+      if (!map.hasLayer(heatLayer)) {
+        heatLayer.addTo(map);
+      }
+    }
   }
+}
+
+function populateFilterOptions(features) {
+  const instructorSelect = document.getElementById("instructor-filter");
+  const raionSelect = document.getElementById("raion-filter");
+  const hromadaSelect = document.getElementById("hromada-filter");
+
+  const instructors = new Set();
+  const raions = new Set();
+  const hromadas = new Set();
+
+  features.forEach(function(f){
+    const p = f.properties || {};
+    if (p.instructor_1) instructors.add(p.instructor_1);
+    if (p.instructor_2) instructors.add(p.instructor_2);
+    if (p.raion) raions.add(p.raion);
+    if (p.hromada) hromadas.add(p.hromada);
+  });
+
+  function fillSelect(select, values, defaultText) {
+    select.innerHTML = "";
+    const defaultOption = document.createElement("option");
+    defaultOption.value = "";
+    defaultOption.textContent = defaultText;
+    select.appendChild(defaultOption);
+
+    [...values]
+      .sort((a, b) => a.localeCompare(b, "uk"))
+      .forEach(function(value){
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        select.appendChild(option);
+      });
+  }
+
+  fillSelect(instructorSelect, instructors, "Усі інструктори");
+  fillSelect(raionSelect, raions, "Усі райони");
+  fillSelect(hromadaSelect, hromadas, "Усі громади");
 }
 
 function applyFilters(){
   var txt = (document.getElementById('search-input').value || '').trim().toLowerCase();
   var sVal = document.getElementById('start-date').value;
   var eVal = document.getElementById('end-date').value;
+  var selectedInstructor = document.getElementById('instructor-filter').value;
+  var selectedRaion = document.getElementById('raion-filter').value;
+  var selectedHromada = document.getElementById('hromada-filter').value;
 
   var sDate = sVal ? new Date(sVal + 'T00:00:00') : null;
   var eDate = eVal ? new Date(eVal + 'T23:59:59.999') : null;
@@ -358,16 +340,21 @@ function applyFilters(){
       !txt ||
       (p.hromada && p.hromada.toLowerCase().includes(txt)) ||
       (p.raion && p.raion.toLowerCase().includes(txt)) ||
-      (p.settlement && p.settlement.toLowerCase().includes(txt)) ||
-      (p.instructor_1 && p.instructor_1.toLowerCase().includes(txt)) ||
-      (p.instructor_2 && p.instructor_2.toLowerCase().includes(txt));
+      (p.settlement && p.settlement.toLowerCase().includes(txt));
 
-    var d = p.datetime ? new Date(p.datetime) : null;
-    var validDate = d && !isNaN(d.getTime());
+    var d = parseDate(p.session_date);
     var okS = !sDate || (d && d >= sDate);
     var okE = !eDate || (d && d <= eDate);
 
-    return matchSearch && (!p.datetime || validDate) && okS && okE;
+    var matchInstructor =
+      !selectedInstructor ||
+      p.instructor_1 === selectedInstructor ||
+      p.instructor_2 === selectedInstructor;
+
+    var matchRaion = !selectedRaion || p.raion === selectedRaion;
+    var matchHromada = !selectedHromada || p.hromada === selectedHromada;
+
+    return matchSearch && okS && okE && matchInstructor && matchRaion && matchHromada;
   });
 
   buildLayers(filtered);
@@ -392,25 +379,31 @@ async function loadLiveSessions(){
     const rows = await sessionsResponse.json();
 
     buildSettlementsLookup(settlementsGeo);
-    const features = convertRowsToFeatures(Array.isArray(rows) ? rows : []);
+    liveRows = Array.isArray(rows) ? rows : [];
 
-    allSessions = features;
+    allSessions = convertRowsToFeatures(liveRows);
     buildLayers(allSessions);
+    populateFilterOptions(allSessions);
   } catch (error) {
     console.error(error);
   }
 }
 
-// ====== 4) SEARCH / FILTER CONTROL ======
+// ===== CONTROLS =====
 var searchControl = L.control({ position:'topright' });
 
 searchControl.onAdd = function(){
   var div = L.DomUtil.create('div','search-control');
+
   div.innerHTML =
-    '<input type="text" id="search-input" placeholder="Пошук по району / громаді / НП / інструктору" />' +
-    '<label>Від: <input type="date" id="start-date" /></label>' +
-    '<label>До: <input type="date" id="end-date" /></label>' +
-    '<button id="filter-btn" style="cursor:pointer;">Фільтрувати</button>' +
+    '<input type="text" id="search-input" placeholder="Пошук по району / громаді / НП" />' +
+    '<label>Період від: <input type="date" id="start-date" /></label>' +
+    '<label>Період до: <input type="date" id="end-date" /></label>' +
+    '<label>Інструктор: <select id="instructor-filter"><option value="">Усі інструктори</option></select></label>' +
+    '<label>Район: <select id="raion-filter"><option value="">Усі райони</option></select></label>' +
+    '<label>Громада: <select id="hromada-filter"><option value="">Усі громади</option></select></label>' +
+    '<button id="filter-btn" style="cursor:pointer;">Застосувати фільтри</button>' +
+    '<button id="reset-btn" style="cursor:pointer;">Скинути фільтри</button>' +
     '<button id="refresh-btn" style="cursor:pointer;">Оновити дані</button>';
 
   L.DomEvent.disableClickPropagation(div);
@@ -421,64 +414,89 @@ searchControl.addTo(map);
 
 setTimeout(function(){
   document.getElementById('filter-btn').addEventListener('click', applyFilters);
+
   document.getElementById('refresh-btn').addEventListener('click', function(){
-    loadLiveSessions().then(applyFilters);
+    loadLiveSessions();
+  });
+
+  document.getElementById('reset-btn').addEventListener('click', function(){
+    document.getElementById('search-input').value = "";
+    document.getElementById('start-date').value = "";
+    document.getElementById('end-date').value = "";
+    document.getElementById('instructor-filter').value = "";
+    document.getElementById('raion-filter').value = "";
+    document.getElementById('hromada-filter').value = "";
+    buildLayers(allSessions);
+  });
+
+  document.getElementById('raion-filter').addEventListener('change', function(){
+    const selectedRaion = this.value;
+    const hromadaSelect = document.getElementById('hromada-filter');
+
+    const hromadas = new Set();
+    allSessions.forEach(function(f){
+      const p = f.properties || {};
+      if (!selectedRaion || p.raion === selectedRaion) {
+        if (p.hromada) hromadas.add(p.hromada);
+      }
+    });
+
+    hromadaSelect.innerHTML = '<option value="">Усі громади</option>';
+    [...hromadas]
+      .sort((a, b) => a.localeCompare(b, "uk"))
+      .forEach(function(value){
+        const option = document.createElement("option");
+        option.value = value;
+        option.textContent = value;
+        hromadaSelect.appendChild(option);
+      });
   });
 }, 0);
 
-// ====== 5) LAYERS CONTROL ======
+// ===== LAYERS =====
+heatProxy.on('add', function(){
+  if (heatLayer && !map.hasLayer(heatLayer)) {
+    heatLayer.addTo(map);
+  }
+});
+
+heatProxy.on('remove', function(){
+  if (heatLayer && map.hasLayer(heatLayer)) {
+    map.removeLayer(heatLayer);
+  }
+});
+
 var overlays = {
   'Кластер точок': clusterLayer,
+  'Heatmap всієї області': heatProxy,
   'Демо-полігони громад': choroplethLayer
 };
 
-if (hasTD) {
-  overlays['Точки у часі (Time slider)'] = timePointsGroup;
-}
-
-if (typeof L.heatLayer !== 'undefined') {
-  var proxy = L.layerGroup();
-
-  proxy.on('add', function(){
-    if (heatLayer) heatLayer.addTo(map);
-  });
-
-  proxy.on('remove', function(){
-    if (heatLayer) map.removeLayer(heatLayer);
-  });
-
-  overlays['Heatmap Харківщини (бенефіціари)'] = proxy;
-  map.addLayer(proxy);
-}
-
 L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
 
-// ====== 6) DEFAULT LAYERS ======
+// default
 map.addLayer(clusterLayer);
-if (hasTD) map.addLayer(timePointsGroup);
+map.addLayer(heatProxy);
 
-// ====== 7) LEGEND ======
+// ===== LEGEND =====
 var legend = L.control({position:'bottomright'});
 legend.onAdd = function(){
   var div = L.DomUtil.create('div','legend');
   var grades = [0,10,50,100,500,1000,5000];
   div.innerHTML += '<b>Осіб за період</b><br>';
 
-  for (var i = 0; i < grades.length; i++){
+  for (var i=0;i<grades.length;i++){
     var from = grades[i];
-    var to = grades[i + 1];
+    var to = grades[i+1];
     var c = color(from + 0.1);
 
-    div.innerHTML +=
-      '<i style="background:' + c + '"></i> ' +
-      from + (to ? '&ndash;' + to : '+') + '<br>';
+    div.innerHTML += '<i style="background:'+c+'"></i> '+from+(to?'&ndash;'+to:'+')+'<br>';
   }
-
   return div;
 };
 legend.addTo(map);
 
-// ====== 8) INITIAL LOAD ======
+// ===== INIT =====
 loadLiveSessions();
 </script>
 </body>
