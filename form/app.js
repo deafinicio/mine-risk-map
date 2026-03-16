@@ -3,6 +3,10 @@ const hromadaSelect = document.getElementById("hromada");
 const settlementSelect = document.getElementById("settlement");
 const form = document.getElementById("mre-form");
 const statusBox = document.getElementById("form-status");
+const submitButton = form.querySelector('button[type="submit"]');
+
+const APPS_SCRIPT_URL =
+  "https://script.google.com/macros/s/AKfycbwjkDIpVHVnHva2Xkxhas1v9ncIpBhfh1uDUOwaTg3n-o2zkaNqsd1huC9zUsA54EUmfA/exec";
 
 let locationsData = {};
 
@@ -99,12 +103,45 @@ hromadaSelect.addEventListener("change", () => {
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
-  const formData = new FormData(form);
-  const data = Object.fromEntries(formData.entries());
+  submitButton.disabled = true;
+  setStatus("Надсилання даних...", "info");
 
-  console.log("Поки що тестове надсилання. Дані форми:", data);
+  try {
+    const formData = new FormData(form);
+    const data = Object.fromEntries(formData.entries());
 
-  setStatus("Тест успішний: форма зібрала дані. Поки що без відправки.", "success");
+    data.participants_total = Number(data.participants_total || 0);
+    data.participants_u18 = Number(data.participants_u18 || 0);
+    data.participants_18plus = Number(data.participants_18plus || 0);
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify(data)
+    });
+
+    const result = await response.json();
+
+    if (!result.success) {
+      throw new Error(result.message || "Невідома помилка сервера");
+    }
+
+    setStatus("Дані успішно збережено.", "success");
+    form.reset();
+
+    resetSelect(hromadaSelect, "Спочатку оберіть район");
+    resetSelect(settlementSelect, "Спочатку оберіть громаду");
+    hromadaSelect.disabled = true;
+    settlementSelect.disabled = true;
+
+  } catch (error) {
+    console.error(error);
+    setStatus(`Помилка надсилання: ${error.message}`, "error");
+  } finally {
+    submitButton.disabled = false;
+  }
 });
 
 loadLocations();
