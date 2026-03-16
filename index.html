@@ -282,9 +282,9 @@ intensity = Math.max(0.15, Math.min(1, intensity));
 if (!heatLayer) {
   heatLayer = L.heatLayer(heatData, {
     radius: 15,
-    blur: 30,
-    maxZoom: 12,
-    minOpacity: 0.45
+    blur: 45,
+    maxZoom: 14,
+    minOpacity: 0.38
   });
 } else {
   heatLayer.setLatLngs(heatData);
