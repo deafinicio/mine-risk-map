@@ -5,10 +5,8 @@ const form = document.getElementById("mre-form");
 const statusBox = document.getElementById("form-status");
 const submitButton = form.querySelector('button[type="submit"]');
 
-const APPS_SCRIPT_URL =
-  "https://script.google.com/macros/s/AKfycbwjkDIpVHVnHva2Xkxhas1v9ncIpBhfh1uDUOwaTg3n-o2zkaNqsd1huC9zUsA54EUmfA/exec";
-
 let locationsData = {};
+let isSubmitting = false;
 
 function setStatus(message, type = "info") {
   statusBox.textContent = message;
@@ -17,6 +15,7 @@ function setStatus(message, type = "info") {
 
 function resetSelect(select, placeholder) {
   select.innerHTML = "";
+
   const option = document.createElement("option");
   option.value = "";
   option.textContent = placeholder;
@@ -25,6 +24,7 @@ function resetSelect(select, placeholder) {
 
 function populateSelect(select, items, placeholder) {
   resetSelect(select, placeholder);
+
   items.forEach((item) => {
     const option = document.createElement("option");
     option.value = item;
@@ -33,25 +33,28 @@ function populateSelect(select, items, placeholder) {
   });
 }
 
+function sortUk(items) {
+  return [...items].sort((a, b) => a.localeCompare(b, "uk"));
+}
+
 async function loadLocations() {
   try {
     const response = await fetch("./locations.json");
+
     if (!response.ok) {
       throw new Error("Не вдалося завантажити locations.json");
     }
 
     locationsData = await response.json();
 
-    const raions = Object.keys(locationsData).sort((a, b) =>
-      a.localeCompare(b, "uk")
-    );
+    const raions = sortUk(Object.keys(locationsData));
 
     populateSelect(raionSelect, raions, "Оберіть район");
     raionSelect.disabled = false;
 
     setStatus("Довідник локацій завантажено.", "success");
   } catch (error) {
-    console.error(error);
+    console.error("Помилка завантаження довідника:", error);
     setStatus("Помилка завантаження довідника локацій.", "error");
   }
 }
@@ -61,6 +64,7 @@ raionSelect.addEventListener("change", () => {
 
   resetSelect(hromadaSelect, "Спочатку оберіть район");
   resetSelect(settlementSelect, "Спочатку оберіть громаду");
+
   hromadaSelect.disabled = true;
   settlementSelect.disabled = true;
 
@@ -68,9 +72,7 @@ raionSelect.addEventListener("change", () => {
     return;
   }
 
-  const hromadas = Object.keys(locationsData[selectedRaion]).sort((a, b) =>
-    a.localeCompare(b, "uk")
-  );
+  const hromadas = sortUk(Object.keys(locationsData[selectedRaion]));
 
   populateSelect(hromadaSelect, hromadas, "Оберіть громаду");
   hromadaSelect.disabled = false;
@@ -92,56 +94,48 @@ hromadaSelect.addEventListener("change", () => {
     return;
   }
 
-  const settlements = [...locationsData[selectedRaion][selectedHromada]].sort(
-    (a, b) => a.localeCompare(b, "uk")
-  );
+  const settlements = sortUk(locationsData[selectedRaion][selectedHromada]);
 
   populateSelect(settlementSelect, settlements, "Оберіть населений пункт");
   settlementSelect.disabled = false;
 });
 
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
+form.addEventListener("submit", (event) => {
+  if (isSubmitting) {
+    event.preventDefault();
+    return;
+  }
 
+  const total = Number(document.getElementById("participants_total").value || 0);
+  const u18 = Number(document.getElementById("participants_u18").value || 0);
+  const plus18 = Number(document.getElementById("participants_18plus").value || 0);
+
+  if (u18 + plus18 > total) {
+    event.preventDefault();
+    setStatus(
+      "Помилка: сума учасників до 18 і 18+ не може бути більшою за загальну кількість.",
+      "error"
+    );
+    return;
+  }
+
+  isSubmitting = true;
   submitButton.disabled = true;
   setStatus("Надсилання даних...", "info");
 
-  try {
-    const formData = new FormData(form);
-    const data = Object.fromEntries(formData.entries());
-
-    data.participants_total = Number(data.participants_total || 0);
-    data.participants_u18 = Number(data.participants_u18 || 0);
-    data.participants_18plus = Number(data.participants_18plus || 0);
-
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify(data)
-    });
-
-    const result = await response.json();
-
-    if (!result.success) {
-      throw new Error(result.message || "Невідома помилка сервера");
-    }
-
-    setStatus("Дані успішно збережено.", "success");
+  setTimeout(() => {
+    setStatus("Дані надіслано. Перевір таблицю Google Sheets.", "success");
     form.reset();
 
     resetSelect(hromadaSelect, "Спочатку оберіть район");
     resetSelect(settlementSelect, "Спочатку оберіть громаду");
+
     hromadaSelect.disabled = true;
     settlementSelect.disabled = true;
 
-  } catch (error) {
-    console.error(error);
-    setStatus(`Помилка надсилання: ${error.message}`, "error");
-  } finally {
     submitButton.disabled = false;
-  }
+    isSubmitting = false;
+  }, 1500);
 });
 
 loadLocations();
