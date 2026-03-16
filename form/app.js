@@ -31,7 +31,7 @@ function populateSelect(select, items, placeholder) {
 
 async function loadLocations() {
   try {
-    const response = await fetch("locations.json");
+    const response = await fetch("./locations.json");
     if (!response.ok) {
       throw new Error("Не вдалося завантажити locations.json");
     }
