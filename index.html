@@ -290,7 +290,7 @@ function buildLayers(features){
 );
 intensity = Math.max(
   heatSettings.minFloor,
-  Math.min(1, intensity)
+  Math.min(0.6, intensity)
 );
 
     return [c[1], c[0], intensity];
