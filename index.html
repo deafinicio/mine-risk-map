@@ -281,22 +281,14 @@ intensity = Math.max(0.12, Math.min(1, intensity));
 
 if (!heatLayer) {
   heatLayer = L.heatLayer(heatData, {
-    radius: 42,
-    blur: 32,
+    radius: 25,
+    blur: 15,
     maxZoom: 12,
-    minOpacity: 0.22,
-    gradient: {
-      0.15: "#5b6cff",
-      0.35: "#4fc3ff",
-      0.55: "#51ff7a",
-      0.75: "#ffe45c",
-      1.0: "#ff4d3a"
-    }
+    minOpacity: 0.35
   });
 } else {
   heatLayer.setLatLngs(heatData);
 }
-
   if (map.hasLayer(heatProxy)) {
     if (!map.hasLayer(heatLayer)) {
       heatLayer.addTo(map);
