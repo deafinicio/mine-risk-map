@@ -5,29 +5,68 @@
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Mine Risk Heatmap — Kharkiv Oblast</title>
 
-<!-- Leaflet CSS -->
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 
 <style>
-  html, body { height: 100%; margin: 0; }
-  #map { height: 100vh; }
-  .legend { background:#fff; padding:8px 10px; border-radius:6px; line-height:1.4; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-  .legend i { width:14px; height:14px; display:inline-block; margin-right:6px; opacity:.85; }
-  .search-control { background:#fff; padding:8px 10px; border-radius:6px; box-shadow:0 1px 4px rgba(0,0,0,.2); }
-  .search-control input, .search-control button, .search-control label { display:block; margin-bottom:6px; width:100%; }
-  .search-control input, .search-control button { padding:6px; border:1px solid #ccc; border-radius:4px; }
+  html, body {
+    height: 100%;
+    margin: 0;
+  }
+
+  #map {
+    height: 100vh;
+  }
+
+  .control-box {
+    background: #fff;
+    padding: 8px 10px;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.2);
+    font-family: sans-serif;
+    font-size: 14px;
+  }
+
+  .control-box input,
+  .control-box select,
+  .control-box button,
+  .control-box label {
+    display: block;
+    width: 100%;
+    margin-bottom: 6px;
+    box-sizing: border-box;
+  }
+
+  .control-box input,
+  .control-box select,
+  .control-box button {
+    padding: 6px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+  }
+
+  .control-box input[type="range"] {
+    padding: 0;
+    border: 0;
+  }
+
+  .control-box .small-label {
+    font-size: 13px;
+    margin-bottom: 4px;
+  }
+
+  .control-box .section-title {
+    font-weight: 600;
+    margin: 6px 0 8px;
+  }
 </style>
 </head>
 <body>
 <div id="map"></div>
 
-<!-- Leaflet JS -->
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-
-<!-- Heatmap -->
 <script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
 
 <script>
@@ -66,87 +105,48 @@ function parseDate(value) {
 }
 
 // ===== MAP =====
-var map = L.map('map', { zoomControl: true }).setView([49.9935, 36.2304], 8);
+var map = L.map("map", { zoomControl: true }).setView([49.9935, 36.2304], 8);
 
 var kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
 map.fitBounds(kharkivBounds);
 
 // ===== BASEMAPS =====
 var osm = L.tileLayer(
-  'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-  { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
+  { maxZoom: 19, crossOrigin: true, attribution: "&copy; OpenStreetMap" }
 );
 
 var carto = L.tileLayer(
-  'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',
-  { maxZoom:20, crossOrigin:true, attribution:'&copy; OpenStreetMap &copy; CARTO' }
+  "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png",
+  { maxZoom: 20, crossOrigin: true, attribution: "&copy; OpenStreetMap &copy; CARTO" }
 );
 
 var osmde = L.tileLayer(
-  'https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png',
-  { maxZoom:19, crossOrigin:true, attribution:'&copy; OpenStreetMap' }
+  "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+  { maxZoom: 19, crossOrigin: true, attribution: "&copy; OpenStreetMap" }
 );
 
 osm.addTo(map);
 
-function fallback(fromLayer, toLayer){
-  function once(){
-    fromLayer.off('tileerror', once);
-    if (map.hasLayer(fromLayer)) map.removeLayer(fromLayer);
+function fallback(fromLayer, toLayer) {
+  function once() {
+    fromLayer.off("tileerror", once);
+    if (map.hasLayer(fromLayer)) {
+      map.removeLayer(fromLayer);
+    }
     toLayer.addTo(map);
   }
-  fromLayer.on('tileerror', once);
+  fromLayer.on("tileerror", once);
 }
+
 fallback(osm, carto);
 fallback(carto, osmde);
 
 var baseLayers = {
-  'OpenStreetMap': osm,
-  'Carto Voyager': carto,
-  'OSM.de': osmde
+  "OpenStreetMap": osm,
+  "Carto Voyager": carto,
+  "OSM.de": osmde
 };
-
-// ===== DEMO CHOROPLETH =====
-//function color(v){
-  //return v > 5000 ? '#800026' :
-    //     v > 1000 ? '#BD0026' :
-       //  v > 500  ? '#E31A1C' :
-      // v > 100  ? '#FC4E2A' :
-        // v > 50   ? '#FD8D3C' :
-//         v > 10   ? '#FEB24C' : '#FFEDA0';
-//}
-
-//var choroplethLayer = L.layerGroup();
-
-//fetch('data/admin_agg.geojson')
-  //.then(function(r){ return r.json(); })
- // .then(function(geo){
-   // var layer = L.geoJSON(geo, {
-    //  style: function(f){
-      //  var sumVal = (f.properties && f.properties.sum_participants != null)
-        //  ? f.properties.sum_participants
-        //  : 0;
-//
-//        return {
-//          weight: 1,
-//          color: '#999',
-//          fillOpacity: 0.7,
-//          fillColor: color(sumVal || 0)
-//        };
-//      },
-//      onEachFeature: function(f,l){
-//        var p = f.properties || {};
-//        var sumVal = (p.sum_participants != null) ? p.sum_participants : 0;
-//        l.bindPopup(
-//          '<b>' + (p.hromada || 'Громада') + '</b><br>' +
-//          'Осіб за період: ' + sumVal +
-//          '<br><small>Демо-полігон</small>'
-//        );
-//      }
-//    });
-//    choroplethLayer.addLayer(layer);
-//  })
-//  .catch(console.error);
 
 // ===== LIVE DATA =====
 var clusterLayer = L.markerClusterGroup();
@@ -154,9 +154,8 @@ var heatLayer = null;
 var heatProxy = L.layerGroup();
 
 var allSessions = [];
-var settlementsLookup = new Map();
-var liveRows = [];
 var currentFeatures = [];
+var settlementsLookup = new Map();
 
 const heatSettings = {
   radius: 40,
@@ -166,10 +165,11 @@ const heatSettings = {
   exponent: 0.42,
   minFloor: 0.10
 };
+
 function buildSettlementsLookup(settlementsGeo) {
   settlementsLookup.clear();
 
-  (settlementsGeo.features || []).forEach(function(f){
+  (settlementsGeo.features || []).forEach(function(f) {
     const p = f.properties || {};
     const geom = f.geometry || {};
     const coords = geom.coordinates;
@@ -189,7 +189,7 @@ function buildSettlementsLookup(settlementsGeo) {
 function convertRowsToFeatures(rows) {
   const features = [];
 
-  rows.forEach(function(row){
+  rows.forEach(function(row) {
     const key = makeKey(row.raion, row.hromada, row.settlement);
     const settlementPoint = settlementsLookup.get(key);
 
@@ -227,7 +227,7 @@ function convertRowsToFeatures(rows) {
   return features;
 }
 
-function buildLayers(features){
+function buildLayers(features) {
   currentFeatures = features;
   clusterLayer.clearLayers();
 
@@ -235,13 +235,16 @@ function buildLayers(features){
     heatLayer.setLatLngs([]);
   }
 
-  var geo = { type:'FeatureCollection', features: features };
+  var geo = {
+    type: "FeatureCollection",
+    features: features
+  };
 
   var markers = L.geoJSON(geo, {
-    pointToLayer: function(f, latlng){
+    pointToLayer: function(f, latlng) {
       return L.marker(latlng);
     },
-    onEachFeature: function(f, layer){
+    onEachFeature: function(f, layer) {
       var p = f.properties || {};
 
       var instructors = [p.instructor_1, p.instructor_2]
@@ -249,14 +252,14 @@ function buildLayers(features){
         .join(", ");
 
       var html =
-        '<b>' + (p.settlement || 'Населений пункт') + '</b><br>' +
-        (p.hromada || '—') + (p.raion ? ', ' + p.raion : '') + '<br>' +
-        'Дата: ' + (p.session_date || '—') + '<br>' +
-        'Інструктори: ' + (instructors || '—') + '<br>' +
-        'Усього учасників: ' + (p.participants_total ?? '—') + '<br>' +
-        'До 18: ' + (p.participants_u18 ?? '—') + '<br>' +
-        '18+: ' + (p.participants_18plus ?? '—') +
-        (p.notes ? '<br>Примітки: ' + p.notes : '');
+        "<b>" + (p.settlement || "Населений пункт") + "</b><br>" +
+        (p.hromada || "—") + (p.raion ? ", " + p.raion : "") + "<br>" +
+        "Дата: " + (p.session_date || "—") + "<br>" +
+        "Інструктори: " + (instructors || "—") + "<br>" +
+        "Усього учасників: " + (p.participants_total ?? "—") + "<br>" +
+        "До 18: " + (p.participants_u18 ?? "—") + "<br>" +
+        "18+: " + (p.participants_18plus ?? "—") +
+        (p.notes ? "<br>Примітки: " + p.notes : "");
 
       layer.bindPopup(html);
     }
@@ -264,62 +267,65 @@ function buildLayers(features){
 
   clusterLayer.addLayer(markers);
 
-  if (typeof L.heatLayer !== 'undefined') {
-  var maxParticipants = 0;
+  if (typeof L.heatLayer !== "undefined") {
+    var maxParticipants = 0;
 
-  features.forEach(function(f) {
-    var p = f.properties || {};
-    var val = safeNumber(p.participants_total);
-    if (val > maxParticipants) maxParticipants = val;
-  });
+    features.forEach(function(f) {
+      var p = f.properties || {};
+      var val = safeNumber(p.participants_total);
+      if (val > maxParticipants) maxParticipants = val;
+    });
 
-  if (maxParticipants <= 0) maxParticipants = 1;
+    if (maxParticipants <= 0) {
+      maxParticipants = 1;
+    }
 
-  var heatData = features.map(function(f) {
-    var c = f.geometry && f.geometry.coordinates;
-    var p = f.properties || {};
+    var heatData = features.map(function(f) {
+      var c = f.geometry && f.geometry.coordinates;
+      var p = f.properties || {};
 
-    if (!c) return null;
+      if (!c) return null;
 
-    var participants = safeNumber(p.participants_total);
+      var participants = safeNumber(p.participants_total);
 
-    // динамічна нормалізація по вибірці
-   var intensity = Math.pow(
-  participants / maxParticipants,
-  heatSettings.exponent
-);
-intensity = Math.max(
-  heatSettings.minFloor,
-  Math.min(0.6, intensity)
-);
+      var intensity = Math.pow(
+        participants / maxParticipants,
+        heatSettings.exponent
+      );
 
-    return [c[1], c[0], intensity];
-  }).filter(Boolean);
+      intensity = Math.max(
+        heatSettings.minFloor,
+        Math.min(1, intensity)
+      );
 
-  if (!heatLayer) {
-heatLayer = L.heatLayer(heatData, {
-  radius: heatSettings.radius,
-  blur: heatSettings.blur,
-  maxZoom: heatSettings.maxZoom,
-  minOpacity: heatSettings.minOpacity,
-  gradient: {
-    0.08: "#6a00ff",
-    0.22: "#5b3dff",
-    0.40: "#3fb8ff",
-    0.60: "#4dff88",
-    0.80: "#ffe14a",
-    1.00: "#ff3b30"
-  }
-});
-  } else {
-    heatLayer.setLatLngs(heatData);
-  }
-  if (map.hasLayer(heatProxy)) {
-    if (!map.hasLayer(heatLayer)) {
-      heatLayer.addTo(map);
+      return [c[1], c[0], intensity];
+    }).filter(Boolean);
+
+    if (!heatLayer) {
+      heatLayer = L.heatLayer(heatData, {
+        radius: heatSettings.radius,
+        blur: heatSettings.blur,
+        maxZoom: heatSettings.maxZoom,
+        minOpacity: heatSettings.minOpacity,
+        gradient: {
+          0.08: "#6a00ff",
+          0.22: "#5b3dff",
+          0.40: "#3fb8ff",
+          0.60: "#4dff88",
+          0.80: "#ffe14a",
+          1.00: "#ff3b30"
+        }
+      });
+    } else {
+      heatLayer.setLatLngs(heatData);
+    }
+
+    if (map.hasLayer(heatProxy)) {
+      if (!map.hasLayer(heatLayer)) {
+        heatLayer.addTo(map);
+      }
     }
   }
-}
 }
 
 function populateFilterOptions(features) {
@@ -331,7 +337,7 @@ function populateFilterOptions(features) {
   const raions = new Set();
   const hromadas = new Set();
 
-  features.forEach(function(f){
+  features.forEach(function(f) {
     const p = f.properties || {};
     if (p.instructor_1) instructors.add(p.instructor_1);
     if (p.instructor_2) instructors.add(p.instructor_2);
@@ -341,6 +347,7 @@ function populateFilterOptions(features) {
 
   function fillSelect(select, values, defaultText) {
     select.innerHTML = "";
+
     const defaultOption = document.createElement("option");
     defaultOption.value = "";
     defaultOption.textContent = defaultText;
@@ -348,7 +355,7 @@ function populateFilterOptions(features) {
 
     [...values]
       .sort((a, b) => a.localeCompare(b, "uk"))
-      .forEach(function(value){
+      .forEach(function(value) {
         const option = document.createElement("option");
         option.value = value;
         option.textContent = value;
@@ -361,18 +368,18 @@ function populateFilterOptions(features) {
   fillSelect(hromadaSelect, hromadas, "Усі громади");
 }
 
-function applyFilters(){
-  var txt = (document.getElementById('search-input').value || '').trim().toLowerCase();
-  var sVal = document.getElementById('start-date').value;
-  var eVal = document.getElementById('end-date').value;
-  var selectedInstructor = document.getElementById('instructor-filter').value;
-  var selectedRaion = document.getElementById('raion-filter').value;
-  var selectedHromada = document.getElementById('hromada-filter').value;
+function applyFilters() {
+  var txt = (document.getElementById("search-input").value || "").trim().toLowerCase();
+  var sVal = document.getElementById("start-date").value;
+  var eVal = document.getElementById("end-date").value;
+  var selectedInstructor = document.getElementById("instructor-filter").value;
+  var selectedRaion = document.getElementById("raion-filter").value;
+  var selectedHromada = document.getElementById("hromada-filter").value;
 
-  var sDate = sVal ? new Date(sVal + 'T00:00:00') : null;
-  var eDate = eVal ? new Date(eVal + 'T23:59:59.999') : null;
+  var sDate = sVal ? new Date(sVal + "T00:00:00") : null;
+  var eDate = eVal ? new Date(eVal + "T23:59:59.999") : null;
 
-  var filtered = allSessions.filter(function(f){
+  var filtered = allSessions.filter(function(f) {
     var p = f.properties || {};
 
     var matchSearch =
@@ -399,11 +406,11 @@ function applyFilters(){
   buildLayers(filtered);
 }
 
-async function loadLiveSessions(){
+async function loadLiveSessions() {
   try {
     const [settlementsResponse, sessionsResponse] = await Promise.all([
-      fetch(SETTLEMENTS_GEOJSON_URL + '?nocache=' + Date.now()),
-      fetch(APPS_SCRIPT_DATA_URL + '?nocache=' + Date.now())
+      fetch(SETTLEMENTS_GEOJSON_URL + "?nocache=" + Date.now()),
+      fetch(APPS_SCRIPT_DATA_URL + "?nocache=" + Date.now())
     ]);
 
     if (!settlementsResponse.ok) {
@@ -418,9 +425,8 @@ async function loadLiveSessions(){
     const rows = await sessionsResponse.json();
 
     buildSettlementsLookup(settlementsGeo);
-    liveRows = Array.isArray(rows) ? rows : [];
 
-    allSessions = convertRowsToFeatures(liveRows);
+    allSessions = convertRowsToFeatures(Array.isArray(rows) ? rows : []);
     buildLayers(allSessions);
     populateFilterOptions(allSessions);
   } catch (error) {
@@ -429,10 +435,10 @@ async function loadLiveSessions(){
 }
 
 // ===== CONTROLS =====
-var searchControl = L.control({ position:'topright' });
+var searchControl = L.control({ position: "topright" });
 
-searchControl.onAdd = function(){
-  var div = L.DomUtil.create('div','search-control');
+searchControl.onAdd = function() {
+  var div = L.DomUtil.create("div", "control-box");
 
   div.innerHTML =
     '<input type="text" id="search-input" placeholder="Пошук по району / громаді / НП" />' +
@@ -450,34 +456,32 @@ searchControl.onAdd = function(){
 };
 
 searchControl.addTo(map);
-var heatSettingsControl = L.control({ position: 'topleft' });
 
-heatSettingsControl.onAdd = function () {
-  var div = L.DomUtil.create('div', 'search-control');
-  div.style.width = '260px';
+var heatSettingsControl = L.control({ position: "topleft" });
+
+heatSettingsControl.onAdd = function() {
+  var div = L.DomUtil.create("div", "control-box");
+  div.style.width = "260px";
 
   div.innerHTML = `
-    <button id="toggle-heat-settings" style="margin-bottom:8px; cursor:pointer;">⚙</button>
+    <button id="toggle-heat-settings" style="margin-bottom:8px; cursor:pointer;">⚙ Налаштування heatmap</button>
     <div id="heat-settings-panel" style="display:none;">
-      <label>Radius: <span id="radius-value">${heatSettings.radius}</span>
-        <input type="range" id="radius-slider" min="10" max="80" step="1" value="${heatSettings.radius}">
-      </label>
+      <div class="section-title">Параметри heatmap</div>
 
-      <label>Blur: <span id="blur-value">${heatSettings.blur}</span>
-        <input type="range" id="blur-slider" min="5" max="60" step="1" value="${heatSettings.blur}">
-      </label>
+      <label class="small-label">Radius: <span id="radius-value">${heatSettings.radius}</span></label>
+      <input type="range" id="radius-slider" min="10" max="80" step="1" value="${heatSettings.radius}">
 
-      <label>Min opacity: <span id="opacity-value">${heatSettings.minOpacity}</span>
-        <input type="range" id="opacity-slider" min="0.05" max="0.80" step="0.01" value="${heatSettings.minOpacity}">
-      </label>
+      <label class="small-label">Blur: <span id="blur-value">${heatSettings.blur}</span></label>
+      <input type="range" id="blur-slider" min="5" max="60" step="1" value="${heatSettings.blur}">
 
-      <label>Exponent: <span id="exponent-value">${heatSettings.exponent}</span>
-        <input type="range" id="exponent-slider" min="0.20" max="1.00" step="0.01" value="${heatSettings.exponent}">
-      </label>
+      <label class="small-label">Min opacity: <span id="opacity-value">${heatSettings.minOpacity}</span></label>
+      <input type="range" id="opacity-slider" min="0.05" max="0.80" step="0.01" value="${heatSettings.minOpacity}">
 
-      <label>Min floor: <span id="floor-value">${heatSettings.minFloor}</span>
-        <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
-      </label>
+      <label class="small-label">Exponent: <span id="exponent-value">${heatSettings.exponent}</span></label>
+      <input type="range" id="exponent-slider" min="0.20" max="1.00" step="0.01" value="${heatSettings.exponent}">
+
+      <label class="small-label">Min floor: <span id="floor-value">${heatSettings.minFloor}</span></label>
+      <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
 
       <button id="reset-heat-settings" style="margin-top:8px; cursor:pointer;">Скинути</button>
     </div>
@@ -488,11 +492,6 @@ heatSettingsControl.onAdd = function () {
 };
 
 heatSettingsControl.addTo(map);
-setTimeout(function(){
-  document.getElementById('toggle-heat-settings').addEventListener('click', function () {
-  const panel = document.getElementById('heat-settings-panel');
-  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
-});
 
 function refreshHeatmapSettings() {
   if (currentFeatures.length) {
@@ -504,79 +503,86 @@ function refreshHeatmapSettings() {
   }
 }
 
-document.getElementById('radius-slider').addEventListener('input', function () {
-  heatSettings.radius = Number(this.value);
-  document.getElementById('radius-value').textContent = this.value;
-  refreshHeatmapSettings();
-});
+setTimeout(function() {
+  document.getElementById("toggle-heat-settings").addEventListener("click", function() {
+    const panel = document.getElementById("heat-settings-panel");
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+  });
 
-document.getElementById('blur-slider').addEventListener('input', function () {
-  heatSettings.blur = Number(this.value);
-  document.getElementById('blur-value').textContent = this.value;
-  refreshHeatmapSettings();
-});
+  document.getElementById("radius-slider").addEventListener("input", function() {
+    heatSettings.radius = Number(this.value);
+    document.getElementById("radius-value").textContent = this.value;
+    refreshHeatmapSettings();
+  });
 
-document.getElementById('opacity-slider').addEventListener('input', function () {
-  heatSettings.minOpacity = Number(this.value);
-  document.getElementById('opacity-value').textContent = this.value;
-  refreshHeatmapSettings();
-});
+  document.getElementById("blur-slider").addEventListener("input", function() {
+    heatSettings.blur = Number(this.value);
+    document.getElementById("blur-value").textContent = this.value;
+    refreshHeatmapSettings();
+  });
 
-document.getElementById('exponent-slider').addEventListener('input', function () {
-  heatSettings.exponent = Number(this.value);
-  document.getElementById('exponent-value').textContent = this.value;
-  refreshHeatmapSettings();
-});
+  document.getElementById("opacity-slider").addEventListener("input", function() {
+    heatSettings.minOpacity = Number(this.value);
+    document.getElementById("opacity-value").textContent = this.value;
+    refreshHeatmapSettings();
+  });
 
-document.getElementById('floor-slider').addEventListener('input', function () {
-  heatSettings.minFloor = Number(this.value);
-  document.getElementById('floor-value').textContent = this.value;
-  refreshHeatmapSettings();
-});
+  document.getElementById("exponent-slider").addEventListener("input", function() {
+    heatSettings.exponent = Number(this.value);
+    document.getElementById("exponent-value").textContent = this.value;
+    refreshHeatmapSettings();
+  });
 
-document.getElementById('reset-heat-settings').addEventListener('click', function () {
-  heatSettings.radius = 40;
-  heatSettings.blur = 36;
-  heatSettings.minOpacity = 0.30;
-  heatSettings.exponent = 0.42;
-  heatSettings.minFloor = 0.10;
+  document.getElementById("floor-slider").addEventListener("input", function() {
+    heatSettings.minFloor = Number(this.value);
+    document.getElementById("floor-value").textContent = this.value;
+    refreshHeatmapSettings();
+  });
 
-  document.getElementById('radius-slider').value = heatSettings.radius;
-  document.getElementById('blur-slider').value = heatSettings.blur;
-  document.getElementById('opacity-slider').value = heatSettings.minOpacity;
-  document.getElementById('exponent-slider').value = heatSettings.exponent;
-  document.getElementById('floor-slider').value = heatSettings.minFloor;
+  document.getElementById("reset-heat-settings").addEventListener("click", function() {
+    heatSettings.radius = 40;
+    heatSettings.blur = 36;
+    heatSettings.minOpacity = 0.30;
+    heatSettings.exponent = 0.42;
+    heatSettings.minFloor = 0.10;
 
-  document.getElementById('radius-value').textContent = heatSettings.radius;
-  document.getElementById('blur-value').textContent = heatSettings.blur;
-  document.getElementById('opacity-value').textContent = heatSettings.minOpacity;
-  document.getElementById('exponent-value').textContent = heatSettings.exponent;
-  document.getElementById('floor-value').textContent = heatSettings.minFloor;
+    document.getElementById("radius-slider").value = heatSettings.radius;
+    document.getElementById("blur-slider").value = heatSettings.blur;
+    document.getElementById("opacity-slider").value = heatSettings.minOpacity;
+    document.getElementById("exponent-slider").value = heatSettings.exponent;
+    document.getElementById("floor-slider").value = heatSettings.minFloor;
 
-  refreshHeatmapSettings();
-});
-  document.getElementById('filter-btn').addEventListener('click', applyFilters);
+    document.getElementById("radius-value").textContent = heatSettings.radius;
+    document.getElementById("blur-value").textContent = heatSettings.blur;
+    document.getElementById("opacity-value").textContent = heatSettings.minOpacity;
+    document.getElementById("exponent-value").textContent = heatSettings.exponent;
+    document.getElementById("floor-value").textContent = heatSettings.minFloor;
 
-  document.getElementById('refresh-btn').addEventListener('click', function(){
+    refreshHeatmapSettings();
+  });
+
+  document.getElementById("filter-btn").addEventListener("click", applyFilters);
+
+  document.getElementById("refresh-btn").addEventListener("click", function() {
     loadLiveSessions();
   });
 
-  document.getElementById('reset-btn').addEventListener('click', function(){
-    document.getElementById('search-input').value = "";
-    document.getElementById('start-date').value = "";
-    document.getElementById('end-date').value = "";
-    document.getElementById('instructor-filter').value = "";
-    document.getElementById('raion-filter').value = "";
-    document.getElementById('hromada-filter').value = "";
+  document.getElementById("reset-btn").addEventListener("click", function() {
+    document.getElementById("search-input").value = "";
+    document.getElementById("start-date").value = "";
+    document.getElementById("end-date").value = "";
+    document.getElementById("instructor-filter").value = "";
+    document.getElementById("raion-filter").value = "";
+    document.getElementById("hromada-filter").value = "";
     buildLayers(allSessions);
   });
 
-  document.getElementById('raion-filter').addEventListener('change', function(){
+  document.getElementById("raion-filter").addEventListener("change", function() {
     const selectedRaion = this.value;
-    const hromadaSelect = document.getElementById('hromada-filter');
+    const hromadaSelect = document.getElementById("hromada-filter");
 
     const hromadas = new Set();
-    allSessions.forEach(function(f){
+    allSessions.forEach(function(f) {
       const p = f.properties || {};
       if (!selectedRaion || p.raion === selectedRaion) {
         if (p.hromada) hromadas.add(p.hromada);
@@ -586,7 +592,7 @@ document.getElementById('reset-heat-settings').addEventListener('click', functio
     hromadaSelect.innerHTML = '<option value="">Усі громади</option>';
     [...hromadas]
       .sort((a, b) => a.localeCompare(b, "uk"))
-      .forEach(function(value){
+      .forEach(function(value) {
         const option = document.createElement("option");
         option.value = value;
         option.textContent = value;
@@ -596,26 +602,26 @@ document.getElementById('reset-heat-settings').addEventListener('click', functio
 }, 0);
 
 // ===== LAYERS =====
-heatProxy.on('add', function(){
+heatProxy.on("add", function() {
   if (heatLayer && !map.hasLayer(heatLayer)) {
     heatLayer.addTo(map);
   }
 });
 
-heatProxy.on('remove', function(){
+heatProxy.on("remove", function() {
   if (heatLayer && map.hasLayer(heatLayer)) {
     map.removeLayer(heatLayer);
   }
 });
 
 var overlays = {
-  'Кластер точок': clusterLayer,
-  'Heatmap всієї області': heatProxy
+  "Кластер точок": clusterLayer,
+  "Heatmap всієї області": heatProxy
 };
 
-L.control.layers(baseLayers, overlays, { collapsed:false }).addTo(map);
+L.control.layers(baseLayers, overlays, { collapsed: false }).addTo(map);
 
-// default
+// ===== DEFAULT LAYERS =====
 map.addLayer(clusterLayer);
 map.addLayer(heatProxy);
 
