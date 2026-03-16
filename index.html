@@ -107,46 +107,46 @@ var baseLayers = {
 };
 
 // ===== DEMO CHOROPLETH =====
-function color(v){
-  return v > 5000 ? '#800026' :
-         v > 1000 ? '#BD0026' :
-         v > 500  ? '#E31A1C' :
-         v > 100  ? '#FC4E2A' :
-         v > 50   ? '#FD8D3C' :
-         v > 10   ? '#FEB24C' : '#FFEDA0';
-}
+//function color(v){
+  //return v > 5000 ? '#800026' :
+    //     v > 1000 ? '#BD0026' :
+       //  v > 500  ? '#E31A1C' :
+      // v > 100  ? '#FC4E2A' :
+        // v > 50   ? '#FD8D3C' :
+//         v > 10   ? '#FEB24C' : '#FFEDA0';
+//}
 
-var choroplethLayer = L.layerGroup();
+//var choroplethLayer = L.layerGroup();
 
-fetch('data/admin_agg.geojson')
-  .then(function(r){ return r.json(); })
-  .then(function(geo){
-    var layer = L.geoJSON(geo, {
-      style: function(f){
-        var sumVal = (f.properties && f.properties.sum_participants != null)
-          ? f.properties.sum_participants
-          : 0;
-
-        return {
-          weight: 1,
-          color: '#999',
-          fillOpacity: 0.7,
-          fillColor: color(sumVal || 0)
-        };
-      },
-      onEachFeature: function(f,l){
-        var p = f.properties || {};
-        var sumVal = (p.sum_participants != null) ? p.sum_participants : 0;
-        l.bindPopup(
-          '<b>' + (p.hromada || 'Громада') + '</b><br>' +
-          'Осіб за період: ' + sumVal +
-          '<br><small>Демо-полігон</small>'
-        );
-      }
-    });
-    choroplethLayer.addLayer(layer);
-  })
-  .catch(console.error);
+//fetch('data/admin_agg.geojson')
+  //.then(function(r){ return r.json(); })
+ // .then(function(geo){
+   // var layer = L.geoJSON(geo, {
+    //  style: function(f){
+      //  var sumVal = (f.properties && f.properties.sum_participants != null)
+        //  ? f.properties.sum_participants
+        //  : 0;
+//
+//        return {
+//          weight: 1,
+//          color: '#999',
+//          fillOpacity: 0.7,
+//          fillColor: color(sumVal || 0)
+//        };
+//      },
+//      onEachFeature: function(f,l){
+//        var p = f.properties || {};
+//        var sumVal = (p.sum_participants != null) ? p.sum_participants : 0;
+//        l.bindPopup(
+//          '<b>' + (p.hromada || 'Громада') + '</b><br>' +
+//          'Осіб за період: ' + sumVal +
+//          '<br><small>Демо-полігон</small>'
+//        );
+//      }
+//    });
+//    choroplethLayer.addLayer(layer);
+//  })
+//  .catch(console.error);
 
 // ===== LIVE DATA =====
 var clusterLayer = L.markerClusterGroup();
@@ -156,7 +156,16 @@ var heatProxy = L.layerGroup();
 var allSessions = [];
 var settlementsLookup = new Map();
 var liveRows = [];
+var currentFeatures = [];
 
+const heatSettings = {
+  radius: 40,
+  blur: 36,
+  maxZoom: 12,
+  minOpacity: 0.30,
+  exponent: 0.42,
+  minFloor: 0.10
+};
 function buildSettlementsLookup(settlementsGeo) {
   settlementsLookup.clear();
 
@@ -219,6 +228,7 @@ function convertRowsToFeatures(rows) {
 }
 
 function buildLayers(features){
+  currentFeatures = features;
   clusterLayer.clearLayers();
 
   if (heatLayer) {
@@ -274,21 +284,33 @@ function buildLayers(features){
     var participants = safeNumber(p.participants_total);
 
     // динамічна нормалізація по вибірці
-    var intensity = participants / maxParticipants;
-
-    // мінімальна видимість для дуже малих значень
-    intensity = Math.max(0.15, Math.min(1, intensity));
+   var intensity = Math.pow(
+  participants / maxParticipants,
+  heatSettings.exponent
+);
+intensity = Math.max(
+  heatSettings.minFloor,
+  Math.min(1, intensity)
+);
 
     return [c[1], c[0], intensity];
   }).filter(Boolean);
 
   if (!heatLayer) {
-    heatLayer = L.heatLayer(heatData, {
-      radius: 32,
-      blur: 24,
-      maxZoom: 12,
-      minOpacity: 0.35
-    });
+heatLayer = L.heatLayer(heatData, {
+  radius: heatSettings.radius,
+  blur: heatSettings.blur,
+  maxZoom: heatSettings.maxZoom,
+  minOpacity: heatSettings.minOpacity,
+  gradient: {
+    0.08: "#6a00ff",
+    0.22: "#5b3dff",
+    0.40: "#3fb8ff",
+    0.60: "#4dff88",
+    0.80: "#ffe14a",
+    1.00: "#ff3b30"
+  }
+});
   } else {
     heatLayer.setLatLngs(heatData);
   }
@@ -428,8 +450,111 @@ searchControl.onAdd = function(){
 };
 
 searchControl.addTo(map);
+var heatSettingsControl = L.control({ position: 'topleft' });
 
+heatSettingsControl.onAdd = function () {
+  var div = L.DomUtil.create('div', 'search-control');
+  div.style.width = '260px';
+
+  div.innerHTML = `
+    <button id="toggle-heat-settings" style="margin-bottom:8px; cursor:pointer;">⚙ Налаштування heatmap</button>
+    <div id="heat-settings-panel" style="display:none;">
+      <label>Radius: <span id="radius-value">${heatSettings.radius}</span>
+        <input type="range" id="radius-slider" min="10" max="80" step="1" value="${heatSettings.radius}">
+      </label>
+
+      <label>Blur: <span id="blur-value">${heatSettings.blur}</span>
+        <input type="range" id="blur-slider" min="5" max="60" step="1" value="${heatSettings.blur}">
+      </label>
+
+      <label>Min opacity: <span id="opacity-value">${heatSettings.minOpacity}</span>
+        <input type="range" id="opacity-slider" min="0.05" max="0.80" step="0.01" value="${heatSettings.minOpacity}">
+      </label>
+
+      <label>Exponent: <span id="exponent-value">${heatSettings.exponent}</span>
+        <input type="range" id="exponent-slider" min="0.20" max="1.00" step="0.01" value="${heatSettings.exponent}">
+      </label>
+
+      <label>Min floor: <span id="floor-value">${heatSettings.minFloor}</span>
+        <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
+      </label>
+
+      <button id="reset-heat-settings" style="margin-top:8px; cursor:pointer;">Скинути</button>
+    </div>
+  `;
+
+  L.DomEvent.disableClickPropagation(div);
+  return div;
+};
+
+heatSettingsControl.addTo(map);
 setTimeout(function(){
+  document.getElementById('toggle-heat-settings').addEventListener('click', function () {
+  const panel = document.getElementById('heat-settings-panel');
+  panel.style.display = panel.style.display === 'none' ? 'block' : 'none';
+});
+
+function refreshHeatmapSettings() {
+  if (currentFeatures.length) {
+    if (heatLayer && map.hasLayer(heatLayer)) {
+      map.removeLayer(heatLayer);
+    }
+    heatLayer = null;
+    buildLayers(currentFeatures);
+  }
+}
+
+document.getElementById('radius-slider').addEventListener('input', function () {
+  heatSettings.radius = Number(this.value);
+  document.getElementById('radius-value').textContent = this.value;
+  refreshHeatmapSettings();
+});
+
+document.getElementById('blur-slider').addEventListener('input', function () {
+  heatSettings.blur = Number(this.value);
+  document.getElementById('blur-value').textContent = this.value;
+  refreshHeatmapSettings();
+});
+
+document.getElementById('opacity-slider').addEventListener('input', function () {
+  heatSettings.minOpacity = Number(this.value);
+  document.getElementById('opacity-value').textContent = this.value;
+  refreshHeatmapSettings();
+});
+
+document.getElementById('exponent-slider').addEventListener('input', function () {
+  heatSettings.exponent = Number(this.value);
+  document.getElementById('exponent-value').textContent = this.value;
+  refreshHeatmapSettings();
+});
+
+document.getElementById('floor-slider').addEventListener('input', function () {
+  heatSettings.minFloor = Number(this.value);
+  document.getElementById('floor-value').textContent = this.value;
+  refreshHeatmapSettings();
+});
+
+document.getElementById('reset-heat-settings').addEventListener('click', function () {
+  heatSettings.radius = 40;
+  heatSettings.blur = 36;
+  heatSettings.minOpacity = 0.30;
+  heatSettings.exponent = 0.42;
+  heatSettings.minFloor = 0.10;
+
+  document.getElementById('radius-slider').value = heatSettings.radius;
+  document.getElementById('blur-slider').value = heatSettings.blur;
+  document.getElementById('opacity-slider').value = heatSettings.minOpacity;
+  document.getElementById('exponent-slider').value = heatSettings.exponent;
+  document.getElementById('floor-slider').value = heatSettings.minFloor;
+
+  document.getElementById('radius-value').textContent = heatSettings.radius;
+  document.getElementById('blur-value').textContent = heatSettings.blur;
+  document.getElementById('opacity-value').textContent = heatSettings.minOpacity;
+  document.getElementById('exponent-value').textContent = heatSettings.exponent;
+  document.getElementById('floor-value').textContent = heatSettings.minFloor;
+
+  refreshHeatmapSettings();
+});
   document.getElementById('filter-btn').addEventListener('click', applyFilters);
 
   document.getElementById('refresh-btn').addEventListener('click', function(){
