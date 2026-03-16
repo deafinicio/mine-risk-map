@@ -274,8 +274,8 @@ function buildLayers(features){
     var participants = safeNumber(p.participants_total);
 
     // динамічна нормалізація по вибірці
-   var intensity = Math.sqrt(participants / maxParticipants);
-intensity = Math.max(0.12, Math.min(1, intensity));
+var intensity = participants / maxParticipants;
+intensity = Math.max(0.15, Math.min(1, intensity));
     return [c[1], c[0], intensity];
   }).filter(Boolean);
 
