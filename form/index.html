@@ -1,1 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Форма збору даних MRE</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Форма збору даних MRE</h1>
+    <p class="subtitle">Введення даних про проведену сесію</p>
 
+    <form id="mre-form">
+      <div class="field">
+        <label for="raion">Район</label>
+        <select id="raion" name="raion" required>
+          <option value="">Оберіть район</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="hromada">Громада</label>
+        <select id="hromada" name="hromada" required disabled>
+          <option value="">Спочатку оберіть район</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="settlement">Населений пункт</label>
+        <select id="settlement" name="settlement" required disabled>
+          <option value="">Спочатку оберіть громаду</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label for="session_date">Дата проведення</label>
+        <input type="date" id="session_date" name="session_date" required />
+      </div>
+
+      <div class="field">
+        <label for="instructor">Хто проводив сесію</label>
+        <input type="text" id="instructor" name="instructor" required placeholder="ПІБ або позивний" />
+      </div>
+
+      <div class="field">
+        <label for="participants_total">Загальна кількість учасників</label>
+        <input type="number" id="participants_total" name="participants_total" min="0" required />
+      </div>
+
+      <div class="field">
+        <label for="participants_u18">Кількість до 18 років</label>
+        <input type="number" id="participants_u18" name="participants_u18" min="0" required />
+      </div>
+
+      <div class="field">
+        <label for="participants_18plus">Кількість 18+ років</label>
+        <input type="number" id="participants_18plus" name="participants_18plus" min="0" required />
+      </div>
+
+      <div class="field">
+        <label for="notes">Коментар / примітки</label>
+        <textarea id="notes" name="notes" rows="4" placeholder="Необов’язково"></textarea>
+      </div>
+
+      <div class="actions">
+        <button type="submit">Надіслати</button>
+      </div>
+
+      <div id="form-status" class="status" aria-live="polite"></div>
+    </form>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
