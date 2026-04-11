@@ -128,6 +128,25 @@ button:disabled {
   color: #1d4ed8;
 }
 
+.conditional-section {
+  margin: 22px 0 6px;
+  padding: 18px 18px 2px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  background: #f8fafc;
+}
+
+.section-title {
+  margin: 0 0 16px;
+  font-size: 15px;
+  font-weight: 700;
+  color: #334155;
+}
+
+.hidden {
+  display: none;
+}
+
 @media (max-width: 640px) {
   .container {
     margin: 16px;
