@@ -28,102 +28,82 @@
   <title>Форма збору даних MRE</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <title>Activity Form</title>
+  <script defer src="script.js"></script>
+</head>
+
 <body>
-  <main class="container">
-    <h1>Форма збору даних MRE</h1>
-    <p class="subtitle">Введення даних про проведену сесію</p>
 
-    <form
-  id="mre-form"
-  action="https://script.google.com/macros/s/AKfycbyiDID7u07n2C8rDc_DIfYYVn6OS-0FaAoLCpNl3jDyi7A2bpZiKJfj62TiwYLvjsWFvw/exec"
-  method="POST"
-  target="hidden_iframe"
->
-      <div class="field">
-        <label for="raion">Район</label>
-        <select id="raion" name="raion" required>
-          <option value="">Оберіть район</option>
-        </select>
-      </div>
+<h2>Додати активність</h2>
 
-      <div class="field">
-        <label for="hromada">Громада</label>
-        <select id="hromada" name="hromada" required disabled>
-          <option value="">Спочатку оберіть район</option>
-        </select>
-      </div>
+<form id="activity-form">
 
-      <div class="field">
-        <label for="settlement">Населений пункт</label>
-        <select id="settlement" name="settlement" required disabled>
-          <option value="">Спочатку оберіть громаду</option>
-        </select>
-      </div>
-
-      <div class="field">
-        <label for="session_date">Дата проведення</label>
-        <input type="date" id="session_date" name="session_date" required />
-      </div>
-
-      <div class="field">
-  <label for="instructor_1">Інструктор 1</label>
-  <select id="instructor_1" name="instructor_1" required>
-    <option value="">Оберіть інструктора</option>
-    <option value="Гарбузов В.">Гарбузов В.</option>
-    <option value="Карпенко Н.">Карпенко Н.</option>
-    <option value="Завадський К.">Завадський К.</option>
-    <option value="Сластієнко В.">Сластієнко В.</option>
-    <option value="Тікус А.">Тікус А.</option>
-    <option value="Маркін А.">Маркін А.</option>
-    <option value="Бондар О.">Бондар О.</option>
-    <option value="Гаркуша А.">Гаркуша А.</option>
+  <!-- НАПРЯМОК -->
+  <label>Напрямок:</label>
+  <select id="direction">
+    <option value="EORE">EORE</option>
+    <option value="DIR2">Напрямок 2</option>
+    <option value="DIR3">Напрямок 3</option>
+    <option value="DIR4">Напрямок 4</option>
+    <option value="DIR5">Напрямок 5</option>
   </select>
-</div>
 
-<div class="field">
-  <label for="instructor_2">Інструктор 2</label>
-  <select id="instructor_2" name="instructor_2">
-    <option value="">Необов’язково</option>
-    <option value="Гарбузов В.">Гарбузов В.</option>
-    <option value="Карпенко Н.">Карпенко Н.</option>
-    <option value="Завадський К.">Завадський К.</option>
-    <option value="Сластієнко В.">Сластієнко В.</option>
-    <option value="Тікус А.">Тікус А.</option>
-    <option value="Маркін А.">Маркін А.</option>
-    <option value="Бондар О.">Бондар О.</option>
-    <option value="Гаркуша А.">Гаркуша А.</option>
+  <br><br>
+
+  <!-- РАЙОН -->
+  <label>Район:</label>
+  <select id="district">
+    <option>Харківський</option>
+    <option>Ізюмський</option>
   </select>
-</div>
 
-      <div class="field">
-        <label for="participants_total">Загальна кількість учасників</label>
-        <input type="number" id="participants_total" name="participants_total" min="0" required />
-      </div>
+  <br><br>
 
-      <div class="field">
-        <label for="participants_u18">Кількість до 18 років</label>
-        <input type="number" id="participants_u18" name="participants_u18" min="0" required />
-      </div>
+  <!-- ГРОМАДА -->
+  <label>Громада:</label>
+  <select id="community">
+    <option>Громада 1</option>
+    <option>Громада 2</option>
+  </select>
 
-      <div class="field">
-        <label for="participants_18plus">Кількість 18+ років</label>
-        <input type="number" id="participants_18plus" name="participants_18plus" min="0" required />
-      </div>
+  <br><br>
 
-      <div class="field">
-        <label for="notes">Коментар / примітки</label>
-        <textarea id="notes" name="notes" rows="4" placeholder="Необов’язково"></textarea>
-      </div>
+  <!-- НАСЕЛЕНИЙ ПУНКТ -->
+  <label>Населений пункт:</label>
+  <input type="text" id="settlement">
 
-      <div class="actions">
-        <button type="submit">Надіслати</button>
-      </div>
+  <br><br>
 
-      <div id="form-status" class="status" aria-live="polite"></div>
-    </form>
-  </main>
+  <!-- ІНСТРУКТОР (ТІЛЬКИ EORE) -->
+  <div id="instructor-wrapper">
+    <label>Інструктор:</label>
+    <select id="instructor">
+      <option>Інструктор 1</option>
+      <option>Інструктор 2</option>
+    </select>
+  </div>
 
-  <script src="app.js"></script>
-  <iframe name="hidden_iframe" id="hidden_iframe" style="display:none;"></iframe>
+  <br>
+
+  <!-- КІЛЬКІСТЬ -->
+  <label id="beneficiaries-label">Кількість осіб:</label>
+  <input type="number" id="beneficiaries">
+
+  <br><br>
+
+  <!-- КОМЕНТАР -->
+  <label>Коментар:</label>
+  <textarea id="comment"></textarea>
+
+  <br><br>
+
+  <button type="submit">Зберегти</button>
+
+</form>
+
 </body>
 </html>
