@@ -870,10 +870,12 @@ function populateFilterOptions(features) {
   const instructorSelect = document.getElementById("instructor-filter");
   const raionSelect = document.getElementById("raion-filter");
   const hromadaSelect = document.getElementById("hromada-filter");
+  const settlementSelect = document.getElementById("settlement-filter");
 
   const instructors = new Set();
   const raions = new Set();
   const hromadas = new Set();
+  const settlements = new Set();
 
   features.forEach(function(f) {
     const p = f.properties || {};
@@ -881,6 +883,7 @@ function populateFilterOptions(features) {
     if (p.instructor_2) instructors.add(p.instructor_2);
     if (p.raion) raions.add(p.raion);
     if (p.hromada) hromadas.add(p.hromada);
+    if (p.settlement) settlements.add(p.settlement);
   });
 
   function fillSelect(select, values, defaultText) {
@@ -904,6 +907,30 @@ function populateFilterOptions(features) {
   fillSelect(instructorSelect, instructors, "Усі інструктори");
   fillSelect(raionSelect, raions, "Усі райони");
   fillSelect(hromadaSelect, hromadas, "Усі громади");
+  fillSelect(settlementSelect, settlements, "Усі населені пункти");
+}
+
+function repopulateSettlementOptions(selectedRaion, selectedHromada) {
+  const settlementSelect = document.getElementById("settlement-filter");
+  if (!settlementSelect) return;
+
+  const settlements = new Set();
+  allSessions.forEach(function(f) {
+    const p = f.properties || {};
+    const okRaion = !selectedRaion || p.raion === selectedRaion;
+    const okHromada = !selectedHromada || p.hromada === selectedHromada;
+    if (okRaion && okHromada && p.settlement) settlements.add(p.settlement);
+  });
+
+  settlementSelect.innerHTML = '<option value="">Усі населені пункти</option>';
+  [...settlements]
+    .sort((a, b) => a.localeCompare(b, "uk"))
+    .forEach(function(value) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      settlementSelect.appendChild(option);
+    });
 }
 
 function applyFilters() {
@@ -913,6 +940,7 @@ function applyFilters() {
   var selectedInstructor = document.getElementById("instructor-filter").value;
   var selectedRaion = document.getElementById("raion-filter").value;
   var selectedHromada = document.getElementById("hromada-filter").value;
+  var selectedSettlement = document.getElementById("settlement-filter").value;
 
   var sDate = sVal ? new Date(sVal + "T00:00:00") : null;
   var eDate = eVal ? new Date(eVal + "T23:59:59.999") : null;
@@ -937,8 +965,9 @@ function applyFilters() {
 
     var matchRaion = !selectedRaion || p.raion === selectedRaion;
     var matchHromada = !selectedHromada || p.hromada === selectedHromada;
+    var matchSettlement = !selectedSettlement || p.settlement === selectedSettlement;
 
-    return matchSearch && okS && okE && matchInstructor && matchRaion && matchHromada;
+    return matchSearch && okS && okE && matchInstructor && matchRaion && matchHromada && matchSettlement;
   });
 
   buildLayers(filtered);
@@ -991,6 +1020,7 @@ searchControl.onAdd = function() {
     '<label>Інструктор</label><select id="instructor-filter"><option value="">Усі інструктори</option></select>' +
     '<label>Район</label><select id="raion-filter"><option value="">Усі райони</option></select>' +
     '<label>Громада</label><select id="hromada-filter"><option value="">Усі громади</option></select>' +
+    '<label>Населений пункт</label><select id="settlement-filter"><option value="">Усі населені пункти</option></select>' +
     '<button id="filter-btn">Застосувати</button>' +
     '<button id="reset-btn">Скинути фільтри</button>' +
     '<button id="refresh-btn">Оновити дані</button>' +
@@ -1210,6 +1240,8 @@ setTimeout(function() {
     document.getElementById("instructor-filter").value = "";
     document.getElementById("raion-filter").value = "";
     document.getElementById("hromada-filter").value = "";
+    document.getElementById("settlement-filter").value = "";
+    repopulateSettlementOptions("", "");
     buildLayers(allSessions);
   });
 
@@ -1234,6 +1266,15 @@ setTimeout(function() {
         option.textContent = value;
         hromadaSelect.appendChild(option);
       });
+
+    // Район змінився -> громада скинута, тож населені пункти звужуємо лише за районом
+    repopulateSettlementOptions(selectedRaion, "");
+  });
+
+  document.getElementById("hromada-filter").addEventListener("change", function() {
+    const selectedRaion = document.getElementById("raion-filter").value;
+    const selectedHromada = this.value;
+    repopulateSettlementOptions(selectedRaion, selectedHromada);
   });
 }, 0);
 
