@@ -3,14 +3,18 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mine Risk Heatmap — Kharkiv Oblast</title>
+<title>Mine Risk Map — Kharkiv Oblast</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
 <link rel="icon" type="image/png" href="assets/favicon.png" />
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+
 <!-- Basic SEO -->
-<title>Mine Risk Map — Kharkiv Oblast</title>
 <meta name="description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
 
 <!-- Open Graph -->
@@ -29,24 +33,193 @@
 <meta name="twitter:title" content="Mine Risk Map — Kharkiv Oblast" />
 <meta name="twitter:description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
 <meta name="twitter:image" content="https://deafinicio.github.io/mine-risk-map/assets/preview-map.jpg" />
-  
+
 <style>
+  :root{
+    --bg:            #030a10;
+    --bg-deep:       #010509;
+    --panel:         rgba(5, 18, 26, .90);
+    --panel-soft:    rgba(5, 18, 26, .72);
+    --line:          rgba(51, 226, 255, .16);
+    --grid:          rgba(51, 226, 255, .05);
+    --cyan:          #35e6ff;
+    --cyan-dim:      #1c7f96;
+    --cyan-soft:     rgba(53, 230, 255, .12);
+    --green:         #4dffb0;
+    --amber:         #ffcc4d;
+    --red:           #ff5b5b;
+    --text:          #d6f6ff;
+    --text-dim:      #6f95a3;
+    --font-display:  'Orbitron', sans-serif;
+    --font-mono:     'Share Tech Mono', monospace;
+  }
+
+  *{ box-sizing:border-box; }
+
   html, body {
     height: 100%;
     margin: 0;
+    background: var(--bg);
+    font-family: var(--font-mono);
+    color: var(--text);
   }
 
   #map {
-    height: 100vh;
+    position: absolute;
+    inset: 0;
+    top: 52px;
+    height: calc(100% - 52px);
+    background: var(--bg-deep);
   }
 
-  .control-box {
-    background: #fff;
-    padding: 8px 10px;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.2);
-    font-family: sans-serif;
-    font-size: 14px;
+  /* ---------- ambient HUD chrome ---------- */
+
+  #hud-bg{
+    position:fixed; inset:0; z-index:0; pointer-events:none;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 46px 46px;
+  }
+
+  #hud-scan{
+    position:fixed; inset:0; z-index:1000; pointer-events:none;
+    background: repeating-linear-gradient(
+      to bottom,
+      rgba(255,255,255,0.018) 0px,
+      rgba(255,255,255,0.018) 1px,
+      transparent 1px,
+      transparent 3px
+    );
+    mix-blend-mode: overlay;
+  }
+
+  #hud-vignette{
+    position:fixed; inset:0; z-index:999; pointer-events:none;
+    box-shadow: inset 0 0 160px rgba(0,0,0,.75);
+  }
+
+  /* ---------- top bar ---------- */
+
+  #top-bar{
+    position:relative; z-index:600;
+    height:52px;
+    display:flex;
+    align-items:center;
+    gap:22px;
+    padding:0 16px;
+    background: linear-gradient(180deg, #06131a 0%, #030a10 100%);
+    border-bottom:1px solid var(--line);
+    box-shadow: 0 1px 18px rgba(53,230,255,.10);
+    font-family: var(--font-mono);
+    white-space:nowrap;
+    overflow:hidden;
+  }
+
+  #top-bar .brand{
+    font-family: var(--font-display);
+    font-weight:900;
+    letter-spacing:2px;
+    font-size:15px;
+    color: var(--cyan);
+    text-shadow: 0 0 10px rgba(53,230,255,.65);
+    display:flex;
+    align-items:center;
+    gap:8px;
+  }
+
+  #top-bar .brand::before{
+    content:"";
+    width:9px; height:9px;
+    background: var(--green);
+    border-radius:50%;
+    box-shadow:0 0 8px var(--green);
+    animation: blink 1.6s infinite;
+  }
+
+  @keyframes blink{
+    0%,100%{ opacity:1; }
+    50%{ opacity:.25; }
+  }
+
+  .hud-stat{
+    display:flex;
+    flex-direction:column;
+    line-height:1.15;
+    font-size:11px;
+  }
+  .hud-stat b{
+    font-size:12.5px;
+    color:var(--text);
+    letter-spacing:.5px;
+  }
+  .hud-stat span{
+    color:var(--text-dim);
+    font-size:9.5px;
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+  }
+
+  .hud-sep{
+    width:1px; height:26px;
+    background:var(--line);
+    flex:none;
+  }
+
+  #top-bar .spacer{ flex:1; }
+
+  #top-bar .status-tag{
+    font-size:9.5px;
+    letter-spacing:2px;
+    color: var(--green);
+    border:1px solid rgba(77,255,176,.4);
+    padding:3px 8px;
+    text-transform:uppercase;
+    background: rgba(77,255,176,.06);
+  }
+
+  /* ---------- panels (angular HUD frame) ---------- */
+
+  .control-box, .icon-control{
+    background: var(--panel);
+    border: 1px solid var(--line);
+    color: var(--text);
+    font-family: var(--font-mono);
+    font-size: 12px;
+    clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
+    box-shadow: 0 0 0 1px rgba(53,230,255,.05), 0 8px 24px rgba(0,0,0,.55), 0 0 18px rgba(53,230,255,.08);
+    position: relative;
+  }
+
+  .control-box::before, .icon-control::before{
+    content:"";
+    position:absolute; left:0; right:0; top:0;
+    height:2px;
+    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    opacity:.7;
+  }
+
+  .control-box{
+    padding: 12px 14px 10px;
+  }
+
+  .control-box .section-title{
+    font-family: var(--font-display);
+    font-weight:700;
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--cyan);
+    margin: 0 0 10px;
+    padding-bottom:6px;
+    border-bottom: 1px solid var(--line);
+    display:flex;
+    align-items:center;
+    gap:6px;
+  }
+  .control-box .section-title::before{
+    content:"//";
+    color: var(--text-dim);
   }
 
   .control-box input,
@@ -55,56 +228,125 @@
   .control-box label {
     display: block;
     width: 100%;
-    margin-bottom: 6px;
+    margin-bottom: 8px;
     box-sizing: border-box;
+    font-family: var(--font-mono);
+  }
+
+  .control-box label{
+    font-size:9.5px;
+    letter-spacing:1.2px;
+    text-transform:uppercase;
+    color: var(--text-dim);
+    margin-bottom:4px;
   }
 
   .control-box input,
   .control-box select,
   .control-box button {
-    padding: 6px;
-    border: 1px solid #ccc;
-    border-radius: 4px;
+    padding: 7px 8px;
+    border: 1px solid var(--cyan-dim);
+    border-radius: 2px;
+    background: rgba(0,10,16,.55);
+    color: var(--text);
+    font-size:12.5px;
   }
+
+  .control-box select{
+    appearance:none;
+    background-image: linear-gradient(45deg, transparent 50%, var(--cyan) 50%), linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
+    background-position: calc(100% - 14px) center, calc(100% - 9px) center;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+  }
+
+  .control-box input::placeholder{ color: var(--text-dim); }
+
+  .control-box input:focus,
+  .control-box select:focus{
+    outline:none;
+    border-color: var(--cyan);
+    box-shadow: 0 0 0 1px var(--cyan), 0 0 10px rgba(53,230,255,.45);
+  }
+
+  .control-box button{
+    cursor:pointer;
+    color: var(--cyan);
+    letter-spacing:1.5px;
+    text-transform:uppercase;
+    font-size:10.5px;
+    font-weight:700;
+    border-color: var(--cyan-dim);
+    transition: all .15s ease;
+  }
+  .control-box button:hover{
+    background: var(--cyan-soft);
+    border-color: var(--cyan);
+    box-shadow: 0 0 12px rgba(53,230,255,.35);
+  }
+  .control-box button:active{ transform: translateY(1px); }
+
+  #filter-btn{ color: var(--bg); background: var(--cyan); border-color: var(--cyan); }
+  #filter-btn:hover{ background: #7cf1ff; }
 
   .control-box input[type="range"] {
     padding: 0;
     border: 0;
-    margin-bottom: 10px;
+    margin-bottom: 12px;
+    -webkit-appearance:none;
+    height:4px;
+    background: linear-gradient(90deg, var(--cyan-dim), var(--line));
+    border-radius:2px;
+  }
+  .control-box input[type="range"]::-webkit-slider-thumb{
+    -webkit-appearance:none;
+    width:13px; height:13px;
+    border-radius:50%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(53,230,255,.9);
+    cursor:pointer;
+    margin-top:-4.5px;
   }
 
-  .control-box .small-label {
-    font-size: 13px;
+  .control-box .small-label{
+    font-size: 10px;
+    letter-spacing:1px;
+    text-transform:uppercase;
+    color: var(--text-dim);
     margin-bottom: 4px;
+    display:flex;
+    justify-content:space-between;
   }
-
-  .control-box .section-title {
-    font-weight: 600;
-    margin: 6px 0 8px;
-  }
+  .control-box .small-label span{ color: var(--cyan); }
 
   .icon-control {
-    background: #fff;
-    border-radius: 6px;
-    box-shadow: 0 1px 4px rgba(0,0,0,.2);
     overflow: hidden;
+    display:flex;
+    flex-direction:column;
   }
 
   .icon-control button {
-    width: 36px;
-    height: 36px;
+    width: 46px;
+    height: 38px;
     border: 0;
-    background: #fff;
+    border-bottom: 1px solid var(--line);
+    background: transparent;
     cursor: pointer;
-    font-size: 18px;
+    font-size: 9.5px;
+    letter-spacing:1px;
+    font-weight:700;
+    color: var(--cyan);
     line-height: 1;
     display: flex;
     align-items: center;
     justify-content: center;
+    transition: all .15s ease;
   }
+  .icon-control button:last-child{ border-bottom:0; }
 
   .icon-control button:hover {
-    background: #f3f3f3;
+    background: var(--cyan-soft);
+    box-shadow: inset 0 0 12px rgba(53,230,255,.35);
   }
 
   .filter-panel-hidden {
@@ -113,13 +355,174 @@
 
   .export-status {
     margin-top: 6px;
+    font-size: 10px;
+    letter-spacing:.5px;
+    color: var(--green);
+    min-height: 12px;
+  }
+
+  /* ---------- coordinate readout ---------- */
+
+  #coord-readout{
+    position:absolute;
+    left:14px; bottom:14px;
+    z-index:500;
+    font-family: var(--font-mono);
+    font-size: 11px;
+    color: var(--cyan);
+    background: var(--panel-soft);
+    border:1px solid var(--line);
+    padding:6px 10px;
+    letter-spacing:1px;
+    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+    pointer-events:none;
+  }
+  #coord-readout .lbl{ color: var(--text-dim); margin-right:6px; }
+
+  /* ---------- radar decoration ---------- */
+
+  #radar{
+    position:absolute;
+    right:14px; bottom:14px;
+    z-index:500;
+    width:74px; height:74px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background: radial-gradient(circle, rgba(53,230,255,.06) 0%, rgba(0,0,0,.4) 100%);
+    pointer-events:none;
+    overflow:hidden;
+  }
+  #radar::before{
+    content:"";
+    position:absolute; inset:0;
+    background: conic-gradient(from 0deg, rgba(53,230,255,.55), transparent 28%, transparent 100%);
+    animation: sweep 3.2s linear infinite;
+  }
+  #radar::after{
+    content:"";
+    position:absolute; inset:8px;
+    border-radius:50%;
+    border:1px solid rgba(53,230,255,.18);
+  }
+  @keyframes sweep{ to{ transform: rotate(360deg); } }
+  #radar span{
+    position:absolute; bottom:3px; left:0; right:0;
+    text-align:center;
+    font-size:7.5px;
+    letter-spacing:1.5px;
+    color: var(--text-dim);
+  }
+
+  /* ---------- leaflet overrides ---------- */
+
+  .leaflet-container{
+    background: var(--bg-deep);
+    font-family: var(--font-mono);
+  }
+
+  .leaflet-control-zoom a{
+    background: var(--panel) !important;
+    color: var(--cyan) !important;
+    border: 1px solid var(--line) !important;
+  }
+  .leaflet-control-zoom a:hover{
+    background: var(--cyan-soft) !important;
+  }
+
+  .leaflet-control-layers{
+    background: var(--panel) !important;
+    color: var(--text) !important;
+    border: 1px solid var(--line) !important;
+    font-family: var(--font-mono);
     font-size: 12px;
-    color: #444;
+    box-shadow: 0 0 18px rgba(53,230,255,.08);
+  }
+  .leaflet-control-layers-separator{ border-color: var(--line) !important; }
+
+  .leaflet-popup-content-wrapper{
+    background: var(--panel);
+    color: var(--text);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    font-family: var(--font-mono);
+    box-shadow: 0 0 20px rgba(53,230,255,.18);
+  }
+  .leaflet-popup-content{ font-size:12.5px; line-height:1.5; }
+  .leaflet-popup-content b{ color: var(--cyan); }
+  .leaflet-popup-tip{ background: var(--panel); border:1px solid var(--line); }
+  .leaflet-popup-close-button{ color: var(--cyan) !important; }
+
+  .leaflet-bar{ border: none !important; }
+
+  .leaflet-control-attribution{
+    background: rgba(3,10,16,.7) !important;
+    color: var(--text-dim) !important;
+    font-family: var(--font-mono);
+    font-size:10px;
+  }
+  .leaflet-control-attribution a{ color: var(--cyan-dim) !important; }
+
+  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large{
+    background: rgba(53,230,255,.15) !important;
+  }
+  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div{
+    background: rgba(3,15,20,.85) !important;
+    color: var(--cyan) !important;
+    border: 1px solid var(--cyan) !important;
+    box-shadow: 0 0 10px rgba(53,230,255,.5);
+    font-family: var(--font-mono);
+    font-weight:700;
+  }
+
+  .hud-marker{
+    width:14px; height:14px;
+    border-radius:50%;
+    background: radial-gradient(circle, rgba(53,230,255,.9) 0%, rgba(53,230,255,.15) 70%);
+    border: 1px solid var(--cyan);
+    box-shadow: 0 0 8px rgba(53,230,255,.9);
+    position:relative;
+  }
+  .hud-marker::after{
+    content:"";
+    position:absolute; inset:-6px;
+    border-radius:50%;
+    border:1px solid rgba(53,230,255,.35);
+    animation: pulse-ring 2.2s ease-out infinite;
+  }
+  @keyframes pulse-ring{
+    0%{ transform:scale(.4); opacity:.9; }
+    100%{ transform:scale(1.8); opacity:0; }
   }
 </style>
 </head>
 <body>
+
+<div id="hud-bg"></div>
+
+<div id="top-bar">
+  <div class="brand">MINE RISK // TRACK SYS</div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><b id="hud-clock">--:--:--</b><span>local time</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><b id="hud-date">----</b><span>date</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><b id="hud-total">0</b><span>sessions total</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><b id="hud-shown">0</b><span>shown on map</span></div>
+  <div class="hud-sep"></div>
+  <div class="hud-stat"><b id="hud-participants">0</b><span>participants</span></div>
+  <div class="spacer"></div>
+  <div class="status-tag" id="hud-live">● LIVE FEED</div>
+</div>
+
 <div id="map"></div>
+
+<div id="coord-readout"><span class="lbl">LAT</span><span id="coord-lat">—</span> &nbsp; <span class="lbl">LON</span><span id="coord-lon">—</span></div>
+
+<div id="radar"><span>SCAN</span></div>
+
+<div id="hud-scan"></div>
+<div id="hud-vignette"></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -199,15 +602,49 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(link.href);
 }
 
+// ===== HUD CHROME (clock / coords / stats) =====
+function tickClock() {
+  const now = new Date();
+  const clockEl = document.getElementById("hud-clock");
+  const dateEl = document.getElementById("hud-date");
+  if (clockEl) clockEl.textContent = now.toLocaleTimeString("uk-UA", { hour12: false });
+  if (dateEl) dateEl.textContent = now.toLocaleDateString("uk-UA");
+}
+tickClock();
+setInterval(tickClock, 1000);
+
+function updateHudStats() {
+  const totalEl = document.getElementById("hud-total");
+  const shownEl = document.getElementById("hud-shown");
+  const participantsEl = document.getElementById("hud-participants");
+
+  if (totalEl) totalEl.textContent = allSessions.length;
+  if (shownEl) shownEl.textContent = currentFeatures.length;
+
+  if (participantsEl) {
+    const sum = currentFeatures.reduce(function(acc, f) {
+      return acc + safeNumber((f.properties || {}).participants_total);
+    }, 0);
+    participantsEl.textContent = sum;
+  }
+}
+
 // ===== MAP =====
 var map = L.map("map", { zoomControl: true }).setView([49.9935, 36.2304], 8);
 var kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
 map.fitBounds(kharkivBounds);
 
+map.on("mousemove", function(e) {
+  var latEl = document.getElementById("coord-lat");
+  var lonEl = document.getElementById("coord-lon");
+  if (latEl) latEl.textContent = e.latlng.lat.toFixed(4);
+  if (lonEl) lonEl.textContent = e.latlng.lng.toFixed(4);
+});
+
 // ===== BASEMAPS =====
-var osm = L.tileLayer(
-  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
-  { maxZoom: 19, crossOrigin: true, attribution: "&copy; OpenStreetMap" }
+var dark = L.tileLayer(
+  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  { maxZoom: 20, crossOrigin: true, attribution: "&copy; OpenStreetMap &copy; CARTO" }
 );
 
 var carto = L.tileLayer(
@@ -215,12 +652,12 @@ var carto = L.tileLayer(
   { maxZoom: 20, crossOrigin: true, attribution: "&copy; OpenStreetMap &copy; CARTO" }
 );
 
-var osmde = L.tileLayer(
-  "https://{s}.tile.openstreetmap.de/{z}/{x}/{y}.png",
+var osm = L.tileLayer(
+  "https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png",
   { maxZoom: 19, crossOrigin: true, attribution: "&copy; OpenStreetMap" }
 );
 
-osm.addTo(map);
+dark.addTo(map);
 
 function fallback(fromLayer, toLayer) {
   function once() {
@@ -233,13 +670,13 @@ function fallback(fromLayer, toLayer) {
   fromLayer.on("tileerror", once);
 }
 
-fallback(osm, carto);
-fallback(carto, osmde);
+fallback(dark, carto);
+fallback(carto, osm);
 
 var baseLayers = {
-  "OpenStreetMap": osm,
+  "Dark Ops (за замовч.)": dark,
   "Carto Voyager": carto,
-  "OSM.de": osmde
+  "OpenStreetMap": osm
 };
 
 // ===== LIVE DATA =====
@@ -322,6 +759,16 @@ function convertRowsToFeatures(rows) {
   return features;
 }
 
+function hudDivIcon() {
+  return L.divIcon({
+    className: "",
+    html: '<div class="hud-marker"></div>',
+    iconSize: [14, 14],
+    iconAnchor: [7, 7],
+    popupAnchor: [0, -8]
+  });
+}
+
 function buildLayers(features) {
   currentFeatures = features;
   clusterLayer.clearLayers();
@@ -337,7 +784,7 @@ function buildLayers(features) {
 
   var markers = L.geoJSON(geo, {
     pointToLayer: function(f, latlng) {
-      return L.marker(latlng);
+      return L.marker(latlng, { icon: hudDivIcon() });
     },
     onEachFeature: function(f, layer) {
       var p = f.properties || {};
@@ -415,6 +862,8 @@ function buildLayers(features) {
       }
     }
   }
+
+  updateHudStats();
 }
 
 function populateFilterOptions(features) {
@@ -496,7 +945,10 @@ function applyFilters() {
 }
 
 async function loadLiveSessions() {
+  var liveTag = document.getElementById("hud-live");
   try {
+    if (liveTag) { liveTag.textContent = "● SYNCING"; liveTag.style.color = "var(--amber)"; }
+
     const [settlementsResponse, sessionsResponse] = await Promise.all([
       fetch(SETTLEMENTS_GEOJSON_URL + "?nocache=" + Date.now()),
       fetch(APPS_SCRIPT_DATA_URL + "?nocache=" + Date.now())
@@ -517,8 +969,11 @@ async function loadLiveSessions() {
     allSessions = convertRowsToFeatures(Array.isArray(rows) ? rows : []);
     buildLayers(allSessions);
     populateFilterOptions(allSessions);
+
+    if (liveTag) { liveTag.textContent = "● LIVE FEED"; liveTag.style.color = ""; }
   } catch (error) {
     console.error(error);
+    if (liveTag) { liveTag.textContent = "● FEED ERROR"; liveTag.style.color = "var(--red)"; }
   }
 }
 
@@ -529,15 +984,16 @@ searchControl.onAdd = function() {
   div.id = "filters-panel";
 
   div.innerHTML =
-    '<input type="text" id="search-input" placeholder="Пошук по району / громаді / НП" />' +
-    '<label>Період від: <input type="date" id="start-date" /></label>' +
-    '<label>Період до: <input type="date" id="end-date" /></label>' +
-    '<label>Інструктор: <select id="instructor-filter"><option value="">Усі інструктори</option></select></label>' +
-    '<label>Район: <select id="raion-filter"><option value="">Усі райони</option></select></label>' +
-    '<label>Громада: <select id="hromada-filter"><option value="">Усі громади</option></select></label>' +
-    '<button id="filter-btn" style="cursor:pointer;">Застосувати фільтри</button>' +
-    '<button id="reset-btn" style="cursor:pointer;">Скинути фільтри</button>' +
-    '<button id="refresh-btn" style="cursor:pointer;">Оновити дані</button>' +
+    '<div class="section-title">Target Filters</div>' +
+    '<input type="text" id="search-input" placeholder="Пошук: район / громада / НП" />' +
+    '<label>Період від</label><input type="date" id="start-date" />' +
+    '<label>Період до</label><input type="date" id="end-date" />' +
+    '<label>Інструктор</label><select id="instructor-filter"><option value="">Усі інструктори</option></select>' +
+    '<label>Район</label><select id="raion-filter"><option value="">Усі райони</option></select>' +
+    '<label>Громада</label><select id="hromada-filter"><option value="">Усі громади</option></select>' +
+    '<button id="filter-btn">Застосувати</button>' +
+    '<button id="reset-btn">Скинути фільтри</button>' +
+    '<button id="refresh-btn">Оновити дані</button>' +
     '<div id="export-status" class="export-status"></div>';
 
   L.DomEvent.disableClickPropagation(div);
@@ -551,9 +1007,9 @@ var topLeftIcons = L.control({ position: "topleft" });
 topLeftIcons.onAdd = function() {
   var div = L.DomUtil.create("div", "icon-control");
   div.innerHTML = `
-    <button id="toggle-heat-settings" title="Налаштування heatmap">⚙</button>
-    <button id="export-png-btn" title="Експорт PNG">📷</button>
-    <button id="toggle-filters-btn" title="Показати / сховати фільтри">🧾</button>
+    <button id="toggle-heat-settings" title="Налаштування heatmap">SET</button>
+    <button id="export-png-btn" title="Експорт PNG">PNG</button>
+    <button id="toggle-filters-btn" title="Показати / сховати фільтри">FLT</button>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -570,27 +1026,27 @@ heatSettingsControl.onAdd = function() {
   div.style.display = "none";
 
   div.innerHTML = `
-    <div class="section-title">Heatmap</div>
+    <div class="section-title">Heatmap Params</div>
 
-    <label class="small-label">Radius: <span id="radius-value">${heatSettings.radius}</span></label>
+    <label class="small-label">Radius <span id="radius-value">${heatSettings.radius}</span></label>
     <input type="range" id="radius-slider" min="10" max="80" step="1" value="${heatSettings.radius}">
 
-    <label class="small-label">Blur: <span id="blur-value">${heatSettings.blur}</span></label>
+    <label class="small-label">Blur <span id="blur-value">${heatSettings.blur}</span></label>
     <input type="range" id="blur-slider" min="5" max="60" step="1" value="${heatSettings.blur}">
 
-    <label class="small-label">Min opacity: <span id="opacity-value">${heatSettings.minOpacity}</span></label>
+    <label class="small-label">Min opacity <span id="opacity-value">${heatSettings.minOpacity}</span></label>
     <input type="range" id="opacity-slider" min="0.05" max="0.80" step="0.01" value="${heatSettings.minOpacity}">
 
-    <label class="small-label">Exponent: <span id="exponent-value">${heatSettings.exponent}</span></label>
+    <label class="small-label">Exponent <span id="exponent-value">${heatSettings.exponent}</span></label>
     <input type="range" id="exponent-slider" min="0.20" max="1.00" step="0.01" value="${heatSettings.exponent}">
 
-    <label class="small-label">Min floor: <span id="floor-value">${heatSettings.minFloor}</span></label>
+    <label class="small-label">Min floor <span id="floor-value">${heatSettings.minFloor}</span></label>
     <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
 
-    <label class="small-label">Фіолетовий: <span id="purple-value">${heatSettings.purpleStrength}</span></label>
+    <label class="small-label">Фіолетовий <span id="purple-value">${heatSettings.purpleStrength}</span></label>
     <input type="range" id="purple-slider" min="30" max="120" step="1" value="${heatSettings.purpleStrength}">
 
-    <button id="reset-heat-settings" style="margin-top:8px; cursor:pointer;">Скинути</button>
+    <button id="reset-heat-settings">Скинути</button>
   `;
 
   L.DomEvent.disableClickPropagation(div);
