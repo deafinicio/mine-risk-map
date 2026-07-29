@@ -494,6 +494,159 @@
     0%{ transform:scale(.4); opacity:.9; }
     100%{ transform:scale(1.8); opacity:0; }
   }
+
+  /* ---------- crosshair cursor over the map ---------- */
+
+  .leaflet-container{
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><line x1="12" y1="1" x2="12" y2="9" stroke="%2335e6ff" stroke-width="2"/><line x1="12" y1="15" x2="12" y2="23" stroke="%2335e6ff" stroke-width="2"/><line x1="1" y1="12" x2="9" y2="12" stroke="%2335e6ff" stroke-width="2"/><line x1="15" y1="12" x2="23" y2="12" stroke="%2335e6ff" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="%2335e6ff" stroke-width="1.4"/></svg>') 12 12, crosshair !important;
+  }
+
+  /* ---------- corner viewfinder brackets ---------- */
+
+  .hud-corner{
+    position:fixed;
+    width:44px; height:44px;
+    pointer-events:none;
+    z-index:520;
+    opacity:.6;
+    filter: drop-shadow(0 0 4px rgba(53,230,255,.55));
+  }
+  .hud-corner.tl{ top:60px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+  .hud-corner.tr{ top:60px; right:10px; border-top:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+  .hud-corner.bl{ bottom:10px; left:10px; border-bottom:2px solid var(--cyan); border-left:2px solid var(--cyan); }
+  .hud-corner.br{ bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
+
+  /* ---------- perimeter scan comet ---------- */
+
+  #perimeter-scan{
+    position:fixed;
+    width:7px; height:7px;
+    margin:-3.5px 0 0 -3.5px;
+    border-radius:50%;
+    background: var(--cyan);
+    box-shadow: 0 0 10px 3px rgba(53,230,255,.85);
+    z-index:521;
+    pointer-events:none;
+    animation: perimeterTravel 10s linear infinite;
+  }
+  @keyframes perimeterTravel{
+    0%   { left:0;    top:52px;  }
+    25%  { left:100%; top:52px;  }
+    50%  { left:100%; top:100%; }
+    75%  { left:0;    top:100%; }
+    100% { left:0;    top:52px;  }
+  }
+
+  /* ---------- coordinate rulers ---------- */
+
+  .ruler{
+    position:absolute;
+    z-index:510;
+    pointer-events:none;
+    overflow:hidden;
+  }
+  #ruler-top{ left:0; right:0; top:52px; height:16px; }
+  #ruler-bottom{ left:0; right:0; bottom:0; height:16px; }
+  #ruler-left{ left:0; top:52px; bottom:0; width:16px; }
+  #ruler-right{ right:0; top:52px; bottom:0; width:16px; }
+
+  .tick{
+    position:absolute;
+    font-size:8px;
+    letter-spacing:.5px;
+    color: var(--cyan-dim);
+    white-space:nowrap;
+  }
+  .tick::before{
+    content:"";
+    position:absolute;
+    background: rgba(51,226,255,.35);
+  }
+  #ruler-top .tick{ top:1px; transform:translateX(-50%); }
+  #ruler-top .tick::before{ left:50%; top:-5px; width:1px; height:5px; }
+  #ruler-bottom .tick{ bottom:1px; transform:translateX(-50%); }
+  #ruler-bottom .tick::before{ left:50%; bottom:-5px; width:1px; height:5px; }
+  #ruler-left .tick{ left:3px; writing-mode:vertical-rl; transform:translateY(-50%); }
+  #ruler-left .tick::before{ top:50%; left:-5px; width:5px; height:1px; }
+  #ruler-right .tick{ right:3px; writing-mode:vertical-rl; transform:translateY(-50%); }
+  #ruler-right .tick::before{ top:50%; right:-5px; width:5px; height:1px; }
+
+  /* ---------- lock-on reticle (marker click) ---------- */
+
+  .lock-reticle{
+    position:absolute;
+    z-index:650;
+    pointer-events:none;
+    opacity:0;
+    transform: translate(-50%,-50%) scale(2.2);
+  }
+  .lock-reticle.lock-reticle-anim{
+    animation: reticleLock .85s ease-out forwards;
+  }
+  @keyframes reticleLock{
+    0%   { transform: translate(-50%,-50%) scale(2.4); opacity:0; }
+    35%  { opacity:1; }
+    60%  { transform: translate(-50%,-50%) scale(1); opacity:1; }
+    100% { transform: translate(-50%,-50%) scale(.85); opacity:0; }
+  }
+
+  /* ---------- boot sequence ---------- */
+
+  #boot-sequence{
+    position:fixed; inset:0; z-index:3000;
+    background: var(--bg-deep);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-family: var(--font-mono);
+    transition: opacity .6s ease;
+    background-image:
+      linear-gradient(var(--grid) 1px, transparent 1px),
+      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    background-size: 46px 46px;
+  }
+  #boot-sequence.boot-hidden{
+    opacity:0;
+    pointer-events:none;
+  }
+  .boot-inner{ width:440px; max-width:82vw; }
+  .boot-inner .boot-title{
+    font-family: var(--font-display);
+    color: var(--cyan);
+    letter-spacing:3px;
+    font-size:13px;
+    margin-bottom:18px;
+    text-shadow: 0 0 10px rgba(53,230,255,.6);
+  }
+  .boot-line{
+    font-size:12.5px;
+    color: var(--cyan);
+    letter-spacing:.5px;
+    min-height:18px;
+    margin-bottom:5px;
+    white-space:nowrap;
+    overflow:hidden;
+  }
+  .boot-line:empty::after{ content:""; }
+  .boot-line:not(:empty)::after{
+    content:"▌";
+    margin-left:2px;
+    opacity:.8;
+    animation: blink 1s step-start infinite;
+  }
+  .boot-bar{
+    margin-top:16px;
+    height:4px;
+    background: rgba(53,230,255,.12);
+    border:1px solid var(--line);
+  }
+  .boot-bar-fill{
+    height:100%;
+    width:0%;
+    background: var(--cyan);
+    box-shadow: 0 0 8px rgba(53,230,255,.7);
+    transition: width .25s linear;
+  }
 </style>
 </head>
 <body>
@@ -518,12 +671,34 @@
 
 <div id="map"></div>
 
+<div class="hud-corner tl"></div>
+<div class="hud-corner tr"></div>
+<div class="hud-corner bl"></div>
+<div class="hud-corner br"></div>
+<div id="perimeter-scan"></div>
+
+<div id="ruler-top" class="ruler"></div>
+<div id="ruler-bottom" class="ruler"></div>
+<div id="ruler-left" class="ruler"></div>
+<div id="ruler-right" class="ruler"></div>
+
 <div id="coord-readout"><span class="lbl">LAT</span><span id="coord-lat">—</span> &nbsp; <span class="lbl">LON</span><span id="coord-lon">—</span></div>
 
 <div id="radar"><span>SCAN</span></div>
 
 <div id="hud-scan"></div>
 <div id="hud-vignette"></div>
+
+<div id="boot-sequence">
+  <div class="boot-inner">
+    <div class="boot-title">MINE RISK // TRACK SYS</div>
+    <div class="boot-line" id="boot-line-1"></div>
+    <div class="boot-line" id="boot-line-2"></div>
+    <div class="boot-line" id="boot-line-3"></div>
+    <div class="boot-line" id="boot-line-4"></div>
+    <div class="boot-bar"><div class="boot-bar-fill" id="boot-bar-fill"></div></div>
+  </div>
+</div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
@@ -641,6 +816,71 @@ map.on("mousemove", function(e) {
   if (latEl) latEl.textContent = e.latlng.lat.toFixed(4);
   if (lonEl) lonEl.textContent = e.latlng.lng.toFixed(4);
 });
+
+// ===== COORDINATE RULERS (CAD/targeting-overlay style) =====
+function renderRulers() {
+  var topRuler = document.getElementById("ruler-top");
+  var bottomRuler = document.getElementById("ruler-bottom");
+  var leftRuler = document.getElementById("ruler-left");
+  var rightRuler = document.getElementById("ruler-right");
+
+  if (!topRuler || !bottomRuler || !leftRuler || !rightRuler) return;
+
+  var size = map.getSize();
+  var stepX = 130;
+  var stepY = 110;
+  var margin = 24;
+
+  var hTicks = "";
+  for (var x = margin; x < size.x - margin; x += stepX) {
+    var lngAt = map.containerPointToLatLng([x, 0]).lng;
+    hTicks += '<span class="tick" style="left:' + x + 'px">' + lngAt.toFixed(3) + "°</span>";
+  }
+  topRuler.innerHTML = hTicks;
+  bottomRuler.innerHTML = hTicks;
+
+  var vTicksLeft = "";
+  var vTicksRight = "";
+  for (var y = margin; y < size.y - margin; y += stepY) {
+    var latAtLeft = map.containerPointToLatLng([0, y]).lat;
+    var latAtRight = map.containerPointToLatLng([size.x, y]).lat;
+    vTicksLeft += '<span class="tick" style="top:' + y + 'px">' + latAtLeft.toFixed(3) + "°</span>";
+    vTicksRight += '<span class="tick" style="top:' + y + 'px">' + latAtRight.toFixed(3) + "°</span>";
+  }
+  leftRuler.innerHTML = vTicksLeft;
+  rightRuler.innerHTML = vTicksRight;
+}
+
+map.on("moveend zoomend resize", renderRulers);
+map.whenReady(renderRulers);
+
+// ===== LOCK-ON RETICLE (marker click) =====
+function showLockReticle(containerPoint) {
+  var reticle = document.getElementById("lock-reticle");
+
+  if (!reticle) {
+    reticle = document.createElement("div");
+    reticle.id = "lock-reticle";
+    reticle.className = "lock-reticle";
+    reticle.innerHTML =
+      '<svg width="70" height="70" viewBox="0 0 70 70">' +
+      '<circle cx="35" cy="35" r="30" fill="none" stroke="#35e6ff" stroke-width="1.5" stroke-dasharray="4 3"/>' +
+      '<circle cx="35" cy="35" r="14" fill="none" stroke="#35e6ff" stroke-width="1.5"/>' +
+      '<line x1="35" y1="0" x2="35" y2="14" stroke="#35e6ff" stroke-width="1.5"/>' +
+      '<line x1="35" y1="56" x2="35" y2="70" stroke="#35e6ff" stroke-width="1.5"/>' +
+      '<line x1="0" y1="35" x2="14" y2="35" stroke="#35e6ff" stroke-width="1.5"/>' +
+      '<line x1="56" y1="35" x2="70" y2="35" stroke="#35e6ff" stroke-width="1.5"/>' +
+      "</svg>";
+    map.getContainer().appendChild(reticle);
+  }
+
+  reticle.style.left = containerPoint.x + "px";
+  reticle.style.top = containerPoint.y + "px";
+
+  reticle.classList.remove("lock-reticle-anim");
+  void reticle.offsetWidth;
+  reticle.classList.add("lock-reticle-anim");
+}
 
 // ===== BASEMAPS =====
 var dark = L.tileLayer(
@@ -805,6 +1045,11 @@ function buildLayers(features) {
         (p.notes ? "<br>Примітки: " + p.notes : "");
 
       layer.bindPopup(html);
+
+      layer.on("click", function(e) {
+        var point = map.latLngToContainerPoint(e.latlng);
+        showLockReticle(point);
+      });
     }
   });
 
@@ -1294,8 +1539,61 @@ L.control.layers(baseLayers, overlays, { collapsed: false }).addTo(map);
 map.addLayer(clusterLayer);
 map.addLayer(heatProxy);
 
+// ===== BOOT SEQUENCE =====
+function typeLine(el, text, speed) {
+  return new Promise(function(resolve) {
+    var i = 0;
+    el.textContent = "";
+    var timer = setInterval(function() {
+      el.textContent = text.slice(0, i + 1);
+      i++;
+      if (i >= text.length) {
+        clearInterval(timer);
+        resolve();
+      }
+    }, speed);
+  });
+}
+
+function wait(ms) {
+  return new Promise(function(resolve) { setTimeout(resolve, ms); });
+}
+
+async function runBootSequence(dataPromise) {
+  var overlay = document.getElementById("boot-sequence");
+  var barFill = document.getElementById("boot-bar-fill");
+  var line1 = document.getElementById("boot-line-1");
+  var line2 = document.getElementById("boot-line-2");
+  var line3 = document.getElementById("boot-line-3");
+  var line4 = document.getElementById("boot-line-4");
+
+  if (!overlay) return;
+
+  barFill.style.width = "8%";
+  await typeLine(line1, "> ACCESSING DATABASE...", 18);
+  barFill.style.width = "35%";
+  await wait(150);
+
+  await typeLine(line2, "> AUTH OK", 22);
+  barFill.style.width = "55%";
+  await wait(150);
+
+  await typeLine(line3, "> LOADING GRID...", 18);
+  barFill.style.width = "80%";
+
+  // чекаємо реальні дані з Google Sheets, але не довше 4с
+  await Promise.race([dataPromise, wait(4000)]);
+
+  barFill.style.width = "100%";
+  await typeLine(line4, "> RENDERING MAP LAYERS...", 14);
+  await wait(300);
+
+  overlay.classList.add("boot-hidden");
+}
+
 // ===== INIT =====
-loadLiveSessions();
+var sessionsLoadPromise = loadLiveSessions();
+runBootSequence(sessionsLoadPromise);
 </script>
 </body>
 </html>
