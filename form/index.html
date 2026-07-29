@@ -56,17 +56,7 @@
     method="POST"
     target="hidden_iframe"
   >
-    <div class="field">
-      <label for="direction">Напрямок</label>
-      <select id="direction" name="direction" required>
-        <option value="">Оберіть напрямок</option>
-        <option value="EORE">EORE</option>
-        <option value="Напрямок 2">Напрямок 2</option>
-        <option value="Напрямок 3">Напрямок 3</option>
-        <option value="Напрямок 4">Напрямок 4</option>
-        <option value="Напрямок 5">Напрямок 5</option>
-      </select>
-    </div>
+    <input type="hidden" id="direction" name="direction" value="EORE" />
 
     <div class="field-row">
       <div class="field">
@@ -91,14 +81,13 @@
       </div>
     </div>
 
-    <div class="field">
+    <div class="field date-field">
       <label for="session_date">Дата проведення активності</label>
       <input type="date" id="session_date" name="session_date" required />
     </div>
 
-    <!-- Блок тільки для EORE -->
     <section id="eore-fields" class="conditional-section">
-      <div class="section-title">Поля для EORE</div>
+      <div class="section-title">Учасники сесії</div>
 
       <div class="field-row">
         <div class="field">
@@ -132,31 +121,22 @@
         </div>
       </div>
 
-      <div class="field-row three">
-        <div class="field">
-          <label for="participants_total">Загальна кількість учасників</label>
-          <input type="number" id="participants_total" name="participants_total" min="0" required />
-        </div>
-
+      <div class="field-row">
         <div class="field">
           <label for="participants_u18">Кількість до 18 років</label>
-          <input type="number" id="participants_u18" name="participants_u18" min="0" required />
+          <input type="number" id="participants_u18" name="participants_u18" min="0" step="1" placeholder="0" />
         </div>
 
         <div class="field">
           <label for="participants_18plus">Кількість 18+ років</label>
-          <input type="number" id="participants_18plus" name="participants_18plus" min="0" required />
+          <input type="number" id="participants_18plus" name="participants_18plus" min="0" step="1" placeholder="0" />
         </div>
       </div>
-    </section>
-
-    <!-- Блок для інших напрямків -->
-    <section id="other-direction-fields" class="conditional-section hidden">
-      <div class="section-title">Поля для інших напрямків</div>
 
       <div class="field">
-        <label for="beneficiaries_total">Кількість бенефіціарів</label>
-        <input type="number" id="beneficiaries_total" name="beneficiaries_total" min="0" />
+        <label for="participants_total">Загальна кількість учасників <span class="auto-tag">авто</span></label>
+        <input type="number" id="participants_total" name="participants_total" min="0" readonly />
+        <p class="field-hint">Обчислюється автоматично як сума полів «До 18» і «18+». Заповни хоча б одне з них.</p>
       </div>
     </section>
 
