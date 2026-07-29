@@ -342,6 +342,59 @@ button:disabled {
   display: none;
 }
 
+/* ---------- auto-computed total field ---------- */
+
+.auto-tag {
+  display: inline-block;
+  margin-left: 6px;
+  font-size: 8.5px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--green);
+  border: 1px solid rgba(77, 255, 176, .4);
+  padding: 1px 6px;
+  background: rgba(77, 255, 176, .08);
+  vertical-align: middle;
+}
+
+input[readonly] {
+  cursor: default;
+  background: rgba(53, 230, 255, .06);
+  border-color: var(--cyan-dim);
+  color: var(--cyan);
+  font-weight: 700;
+}
+
+input[readonly]:focus {
+  box-shadow: none;
+}
+
+.field-hint {
+  margin: 6px 2px 0;
+  font-size: 11px;
+  color: var(--text-dim);
+  line-height: 1.4;
+}
+
+/* ---------- clickable date field ---------- */
+
+.date-field input[type="date"] {
+  cursor: pointer;
+}
+
+.date-field input[type="date"]::-webkit-calendar-picker-indicator {
+  filter: invert(70%) sepia(80%) saturate(1000%) hue-rotate(150deg) brightness(1.05);
+  cursor: pointer;
+  width: 22px;
+  height: 22px;
+  opacity: 0.85;
+  transition: opacity .15s ease;
+}
+
+.date-field input[type="date"]::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+}
+
 @media (max-width: 640px) {
   #top-bar{
     padding:0 12px;
