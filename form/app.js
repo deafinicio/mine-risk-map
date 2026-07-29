@@ -1,17 +1,11 @@
 const raionSelect = document.getElementById("raion");
 const hromadaSelect = document.getElementById("hromada");
 const settlementSelect = document.getElementById("settlement");
-const directionSelect = document.getElementById("direction");
 
-const eoreFields = document.getElementById("eore-fields");
-const otherDirectionFields = document.getElementById("other-direction-fields");
-
-const instructor1 = document.getElementById("instructor_1");
-const instructor2 = document.getElementById("instructor_2");
 const participantsTotal = document.getElementById("participants_total");
 const participantsU18 = document.getElementById("participants_u18");
 const participants18Plus = document.getElementById("participants_18plus");
-const beneficiariesTotal = document.getElementById("beneficiaries_total");
+const sessionDate = document.getElementById("session_date");
 
 const form = document.getElementById("mre-form");
 const statusBox = document.getElementById("form-status");
@@ -49,72 +43,31 @@ function sortUk(items) {
   return [...items].sort((a, b) => a.localeCompare(b, "uk"));
 }
 
-function clearFieldValue(element) {
-  if (!element) return;
+// Невід'ємне ціле число з поля вводу; порожнє/некоректне значення -> 0
+function toNonNegativeInt(value) {
+  const n = Math.floor(Number(value));
+  return Number.isFinite(n) && n > 0 ? n : 0;
+}
 
-  if (element.tagName === "SELECT") {
-    element.selectedIndex = 0;
-  } else {
-    element.value = "";
+function recalcParticipantsTotal() {
+  const u18 = toNonNegativeInt(participantsU18.value);
+  const plus18 = toNonNegativeInt(participants18Plus.value);
+  participantsTotal.value = u18 + plus18;
+}
+
+participantsU18.addEventListener("input", recalcParticipantsTotal);
+participants18Plus.addEventListener("input", recalcParticipantsTotal);
+
+// Клік будь-де по полю дати відкриває календар, а не лише по маленькій іконці
+sessionDate.addEventListener("click", () => {
+  if (typeof sessionDate.showPicker === "function") {
+    try {
+      sessionDate.showPicker();
+    } catch (error) {
+      // деякі браузери можуть відмовити показати пікер programmatically — ігноруємо
+    }
   }
-}
-
-function setRequiredAndDisabled(element, { required, disabled }) {
-  element.required = required;
-  element.disabled = disabled;
-}
-
-function updateFormByDirection() {
-  const direction = directionSelect.value;
-
-  if (direction === "EORE") {
-    eoreFields.classList.remove("hidden");
-    otherDirectionFields.classList.add("hidden");
-
-    setRequiredAndDisabled(instructor1, { required: true, disabled: false });
-    setRequiredAndDisabled(instructor2, { required: false, disabled: false });
-    setRequiredAndDisabled(participantsTotal, { required: true, disabled: false });
-    setRequiredAndDisabled(participantsU18, { required: true, disabled: false });
-    setRequiredAndDisabled(participants18Plus, { required: true, disabled: false });
-
-    setRequiredAndDisabled(beneficiariesTotal, { required: false, disabled: true });
-    clearFieldValue(beneficiariesTotal);
-  } else if (direction) {
-    eoreFields.classList.add("hidden");
-    otherDirectionFields.classList.remove("hidden");
-
-    setRequiredAndDisabled(instructor1, { required: false, disabled: true });
-    setRequiredAndDisabled(instructor2, { required: false, disabled: true });
-    setRequiredAndDisabled(participantsTotal, { required: false, disabled: true });
-    setRequiredAndDisabled(participantsU18, { required: false, disabled: true });
-    setRequiredAndDisabled(participants18Plus, { required: false, disabled: true });
-
-    clearFieldValue(instructor1);
-    clearFieldValue(instructor2);
-    clearFieldValue(participantsTotal);
-    clearFieldValue(participantsU18);
-    clearFieldValue(participants18Plus);
-
-    setRequiredAndDisabled(beneficiariesTotal, { required: true, disabled: false });
-  } else {
-    eoreFields.classList.add("hidden");
-    otherDirectionFields.classList.add("hidden");
-
-    setRequiredAndDisabled(instructor1, { required: false, disabled: true });
-    setRequiredAndDisabled(instructor2, { required: false, disabled: true });
-    setRequiredAndDisabled(participantsTotal, { required: false, disabled: true });
-    setRequiredAndDisabled(participantsU18, { required: false, disabled: true });
-    setRequiredAndDisabled(participants18Plus, { required: false, disabled: true });
-    setRequiredAndDisabled(beneficiariesTotal, { required: false, disabled: true });
-
-    clearFieldValue(instructor1);
-    clearFieldValue(instructor2);
-    clearFieldValue(participantsTotal);
-    clearFieldValue(participantsU18);
-    clearFieldValue(participants18Plus);
-    clearFieldValue(beneficiariesTotal);
-  }
-}
+});
 
 async function loadLocations() {
   try {
@@ -179,43 +132,30 @@ hromadaSelect.addEventListener("change", () => {
   settlementSelect.disabled = false;
 });
 
-directionSelect.addEventListener("change", updateFormByDirection);
-
 form.addEventListener("submit", (event) => {
   if (isSubmitting) {
     event.preventDefault();
     return;
   }
 
-  const direction = directionSelect.value;
+  // Санітизація перед відправкою: чистимо від'ємні/нечислові значення
+  // і перераховуємо загальну кількість, щоб у Google Sheets завжди йшла коректна сума.
+  const u18 = toNonNegativeInt(participantsU18.value);
+  const plus18 = toNonNegativeInt(participants18Plus.value);
 
-  if (!direction) {
+  participantsU18.value = u18;
+  participants18Plus.value = plus18;
+  participantsTotal.value = u18 + plus18;
+
+  const total = u18 + plus18;
+
+  if (total <= 0) {
     event.preventDefault();
-    setStatus("Оберіть напрямок.", "error");
+    setStatus(
+      "Вкажи кількість учасників: заповни «До 18» і/або «18+» — загальна кількість має бути більшою за 0.",
+      "error"
+    );
     return;
-  }
-
-  if (direction === "EORE") {
-    const total = Number(participantsTotal.value || 0);
-    const u18 = Number(participantsU18.value || 0);
-    const plus18 = Number(participants18Plus.value || 0);
-
-    if (u18 + plus18 > total) {
-      event.preventDefault();
-      setStatus(
-        "Помилка: сума учасників до 18 і 18+ не може бути більшою за загальну кількість.",
-        "error"
-      );
-      return;
-    }
-  } else {
-    const beneficiaries = Number(beneficiariesTotal.value || 0);
-
-    if (beneficiaries < 0) {
-      event.preventDefault();
-      setStatus("Помилка: кількість бенефіціарів не може бути меншою за 0.", "error");
-      return;
-    }
   }
 
   isSubmitting = true;
@@ -232,7 +172,7 @@ form.addEventListener("submit", (event) => {
     hromadaSelect.disabled = true;
     settlementSelect.disabled = true;
 
-    updateFormByDirection();
+    participantsTotal.value = "";
 
     submitButton.disabled = false;
     isSubmitting = false;
@@ -240,4 +180,3 @@ form.addEventListener("submit", (event) => {
 });
 
 loadLocations();
-updateFormByDirection();
