@@ -13,6 +13,7 @@
 
   let airLayerGroup = null;
   let airMarkerLayer = null;
+  let airHistoryLayer = null;
   let airGlowLayer = null;
   let airCoreLayer = null;
 
@@ -100,17 +101,20 @@
 
     airGlowLayer = L.layerGroup();
     airCoreLayer = L.layerGroup();
+    airHistoryLayer = L.layerGroup();
     airMarkerLayer = L.layerGroup();
 
     airLayerGroup = L.layerGroup([
       airGlowLayer,
       airCoreLayer,
+      airHistoryLayer,
       airMarkerLayer
     ]);
   }
 
   function clearAirLayers() {
     if (airMarkerLayer) airMarkerLayer.clearLayers();
+    if (airHistoryLayer) airHistoryLayer.clearLayers();
     if (airGlowLayer) airGlowLayer.clearLayers();
     if (airCoreLayer) airCoreLayer.clearLayers();
   }
@@ -223,6 +227,7 @@
     if (live) {
       live.textContent = "● LIVE FEED";
       live.style.color = "";
+      live.title = "";
     }
   }
 
@@ -290,8 +295,6 @@
           ? event.places
           : [];
 
-        // A marker represents one reported position only.
-        // Multi-place reports are intentionally not collapsed to one point.
         if (places.length !== 1) continue;
 
         const latlng = geometryToLatLng(places[0]);
@@ -319,34 +322,26 @@
       "";
   }
 
-  function markerPopupHtml(thread, track, observation) {
-    const event = observation.event || {};
-    const place = observation.place || {};
+  function buildPopupHtml(thread, track, event, place, kind) {
     const rootId = thread && thread.root_message_id;
     const trackId = track && track.track_id;
     const report = sourceText(event);
+    const isCurrent = kind === "current";
 
     let html =
       "<b>" + escapeHtml(threatLabel(track)) + "</b><br>" +
-      "Місце: " + escapeHtml(
-        place.canonical_name || place.id || "—"
-      ) + "<br>" +
+      '<span style="color:' + (isCurrent ? 'var(--cyan)' : 'var(--text-dim)') + '">' +
+      (isCurrent ? "CURRENT REPORTED POSITION" : "REPORTED POSITION") +
+      "</span><br>" +
+      "Місце: " + escapeHtml(place.canonical_name || place.id || "—") + "<br>" +
       "Час повідомлення: " + formatDate(event.telegram_date) + "<br>" +
-      "Статус: " + escapeHtml(
-        track.active === true ? "активне спостереження" : "неактивне"
+      "Статус треку: " + escapeHtml(
+        track.active === true ? "ACTIVE" : "INACTIVE"
       );
 
-    if (trackId) {
-      html += "<br>Track: " + escapeHtml(trackId);
-    }
-
-    if (rootId) {
-      html += "<br>Thread: " + escapeHtml(rootId);
-    }
-
-    if (event.message_id) {
-      html += "<br>Message: " + escapeHtml(event.message_id);
-    }
+    if (trackId) html += "<br>Track: " + escapeHtml(trackId);
+    if (rootId) html += "<br>Thread: " + escapeHtml(rootId);
+    if (event.message_id) html += "<br>Message: " + escapeHtml(event.message_id);
 
     if (report) {
       html +=
@@ -354,25 +349,91 @@
         escapeHtml(report).replace(/\n/g, "<br>");
     }
 
-    html +=
-      '<br><br><span style="color:var(--text-dim)">Точка показує останнє однозначно геоприв’язане повідомлення. Лінії відображають лише послідовність, явно зафіксовану джерелом.</span>';
+    html += isCurrent
+      ? '<br><br><span style="color:var(--text-dim)">Великий пульсуючий маркер — остання однозначно геоприв’язана reported position цього активного треку.</span>'
+      : '<br><br><span style="color:var(--text-dim)">Мала точка — історична reported position. Вона не є прогнозом поточного місцеположення.</span>';
 
     return html;
   }
 
-  function airDivIcon(active) {
-    const opacity = active ? "1" : ".55";
-
+  function airDivIcon() {
     return L.divIcon({
       className: "",
-      html:
-        '<div class="hud-marker" style="opacity:' +
-        opacity +
-        ';width:16px;height:16px"></div>',
+      html: '<div class="hud-marker" style="width:16px;height:16px"></div>',
       iconSize: [16, 16],
       iconAnchor: [8, 8],
       popupAnchor: [0, -10]
     });
+  }
+
+  function historyDivIcon() {
+    return L.divIcon({
+      className: "",
+      html:
+        '<div style="' +
+        'width:8px;height:8px;border-radius:50%;' +
+        'background:#35e6ff;border:1px solid #9ff4ff;' +
+        'box-shadow:0 0 7px rgba(53,230,255,.85);' +
+        'opacity:.82' +
+        '"></div>',
+      iconSize: [8, 8],
+      iconAnchor: [4, 4],
+      popupAnchor: [0, -7]
+    });
+  }
+
+  function installMarkerClickReticle(marker) {
+    marker.on("click", function (e) {
+      if (
+        typeof map !== "undefined" &&
+        typeof showLockReticle === "function"
+      ) {
+        const point = map.latLngToContainerPoint(e.latlng);
+        showLockReticle(point);
+      }
+    });
+  }
+
+  function endpointKey(endpoint) {
+    const place = endpoint && endpoint.place || {};
+    return [
+      endpoint && endpoint.message_id || "",
+      place.id || "",
+      endpoint && endpoint.telegram_date || ""
+    ].join("|");
+  }
+
+  function addHistoricalEndpoint(thread, track, endpoint, seenHistory, currentKey) {
+    if (!endpoint || !endpoint.place) return false;
+
+    const place = endpoint.place;
+    const latlng = geometryToLatLng(place);
+    if (!latlng) return false;
+
+    const key = endpointKey(endpoint);
+    if (!key || seenHistory.has(key) || key === currentKey) return false;
+    seenHistory.add(key);
+
+    const event = {
+      message_id: endpoint.message_id,
+      telegram_date: endpoint.telegram_date
+    };
+
+    const marker = L.marker(latlng, {
+      icon: historyDivIcon(),
+      keyboard: true,
+      riseOnHover: true,
+      zIndexOffset: -100
+    });
+
+    marker.bindPopup(
+      buildPopupHtml(thread, track, event, place, "history"),
+      { maxWidth: 340 }
+    );
+
+    installMarkerClickReticle(marker);
+    marker.addTo(airHistoryLayer);
+    return true;
   }
 
   function drawEdge(edge, seenEdges) {
@@ -433,43 +494,61 @@
     });
 
     const seenEdges = new Set();
+    const seenHistory = new Set();
     let markerCount = 0;
+    let historicalCount = 0;
     let edgeCount = 0;
 
     activeRows.forEach(function (row) {
       const thread = row.thread;
       const track = row.track;
+      const observation = getLatestResolvedObservation(track);
+
+      const currentKey = observation
+        ? endpointKey({
+            message_id: observation.event.message_id,
+            telegram_date: observation.event.telegram_date,
+            place: observation.place
+          })
+        : "";
 
       (track.segments || []).forEach(function (segment) {
         (segment.drawable_edges || []).forEach(function (edge) {
-          if (drawEdge(edge, seenEdges)) edgeCount += 1;
+          if (drawEdge(edge, seenEdges)) {
+            edgeCount += 1;
+
+            if (addHistoricalEndpoint(thread, track, edge.from, seenHistory, currentKey)) {
+              historicalCount += 1;
+            }
+
+            if (addHistoricalEndpoint(thread, track, edge.to, seenHistory, currentKey)) {
+              historicalCount += 1;
+            }
+          }
         });
       });
 
-      const observation = getLatestResolvedObservation(track);
       if (!observation) return;
 
       const marker = L.marker(observation.latlng, {
-        icon: airDivIcon(true),
+        icon: airDivIcon(),
         keyboard: true,
-        riseOnHover: true
+        riseOnHover: true,
+        zIndexOffset: 500
       });
 
       marker.bindPopup(
-        markerPopupHtml(thread, track, observation),
+        buildPopupHtml(
+          thread,
+          track,
+          observation.event || {},
+          observation.place || {},
+          "current"
+        ),
         { maxWidth: 360 }
       );
 
-      marker.on("click", function (e) {
-        if (
-          typeof map !== "undefined" &&
-          typeof showLockReticle === "function"
-        ) {
-          const point = map.latLngToContainerPoint(e.latlng);
-          showLockReticle(point);
-        }
-      });
-
+      installMarkerClickReticle(marker);
       marker.addTo(airMarkerLayer);
       markerCount += 1;
     });
@@ -478,6 +557,7 @@
       loadedTracks: trackRows.length,
       activeTracks: activeRows.length,
       markers: markerCount,
+      historicalMarkers: historicalCount,
       edges: edgeCount
     };
   }
@@ -492,7 +572,9 @@
     if (live) {
       live.textContent = "● AIR FEED";
       live.style.color = "var(--amber)";
-      live.title = stats.edges + " source-only map edges";
+      live.title =
+        stats.edges + " source-only edges; " +
+        stats.historicalMarkers + " historical reported positions";
     }
   }
 
