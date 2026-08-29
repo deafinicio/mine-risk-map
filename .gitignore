@@ -1,0 +1,11 @@
+﻿__pycache__/
+*.pyc
+air-mode-before-*
+air-mode-broken-*
+air-mode1.js
+air-mode.js.backup-*
+air-mode.js.bak-*
+demo-air-before-*
+patch_*.py
+fix-*.py
+install_*.py
