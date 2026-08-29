@@ -6,6 +6,34 @@
   const AIR_LIMIT_THREADS = 200;
   const AIR_REFRESH_MS = 15000;
 
+  const AIR_DEMO_URL =
+    "./demo-air.json";
+
+  const AIR_DATA_MODE_STORAGE_KEY =
+    "mine-risk-map-air-data-mode-v1";
+
+  let airDataMode =
+    localStorage.getItem(
+      AIR_DATA_MODE_STORAGE_KEY
+    ) === "demo"
+      ? "demo"
+      : "live";
+
+  /*
+   * LIVE operational TTL.
+   *
+   * A logical track may remain active in backend if TLK
+   * never publishes an explicit closing status.
+   *
+   * On the LIVE map we therefore stop treating a track as
+   * current after 30 minutes without a new source report.
+   *
+   * The track is NOT deleted. It remains available for
+   * history/timeline analysis.
+   */
+  const AIR_ACTIVE_STALE_MS =
+    30 * 60 * 1000;
+
   let mode = "mine";
   let refreshTimer = null;
   let activeRequest = null;
@@ -13,9 +41,43 @@
 
   let airLayerGroup = null;
   let airMarkerLayer = null;
+  let airTerminalLayer = null;
   let airHistoryLayer = null;
   let airGlowLayer = null;
   let airCoreLayer = null;
+
+  let airVisualSettingsControl = null;
+  let airVisualRaf = null;
+
+  /*
+   * Track visualization modes:
+   *
+   * selected = history/curve only for clicked target
+   * all      = history/curves for every visible track
+   * off      = no history/curves
+   */
+  let airTrackDisplayMode =
+    "selected";
+
+  let selectedAirTrackId =
+    null;
+
+  let reopenSelectedPopup =
+    false;
+
+  const AIR_VISUAL_STORAGE_KEY =
+    "mine-risk-map-air-visual-v1";
+
+  const AIR_VISUAL_DEFAULTS = {
+    iconGlow: 100,
+    glowRadius: 8,
+    pulse: 65,
+    trackGlow: 22,
+    trackWidth: 2.0
+  };
+
+  let airVisualSettings =
+    loadAirVisualSettings();
 
   let mineLayerState = {
     cluster: true,
@@ -48,6 +110,694 @@
 
     if (labelEl) labelEl.textContent = label;
   }
+
+  function clampAirSetting(
+    value,
+    minValue,
+    maxValue
+  ) {
+    const number = Number(value);
+
+    if (!Number.isFinite(number)) {
+      return minValue;
+    }
+
+    return Math.max(
+      minValue,
+      Math.min(maxValue, number)
+    );
+  }
+
+
+  function loadAirVisualSettings() {
+    let stored = {};
+
+    try {
+      stored = JSON.parse(
+        localStorage.getItem(
+          AIR_VISUAL_STORAGE_KEY
+        ) || "{}"
+      );
+    } catch (error) {
+      stored = {};
+    }
+
+    return {
+      iconGlow:
+        clampAirSetting(
+          stored.iconGlow ??
+            AIR_VISUAL_DEFAULTS.iconGlow,
+          0,
+          150
+        ),
+
+      glowRadius:
+        clampAirSetting(
+          stored.glowRadius ??
+            AIR_VISUAL_DEFAULTS.glowRadius,
+          0,
+          20
+        ),
+
+      pulse:
+        clampAirSetting(
+          stored.pulse ??
+            AIR_VISUAL_DEFAULTS.pulse,
+          0,
+          100
+        ),
+
+      trackGlow:
+        clampAirSetting(
+          stored.trackGlow ??
+            AIR_VISUAL_DEFAULTS.trackGlow,
+          0,
+          100
+        ),
+
+      trackWidth:
+        clampAirSetting(
+          stored.trackWidth ??
+            AIR_VISUAL_DEFAULTS.trackWidth,
+          0.5,
+          5
+        )
+    };
+  }
+
+
+  function saveAirVisualSettings() {
+    try {
+      localStorage.setItem(
+        AIR_VISUAL_STORAGE_KEY,
+        JSON.stringify(
+          airVisualSettings
+        )
+      );
+    } catch (error) {
+      // localStorage may be unavailable.
+    }
+  }
+
+
+  function applyAirVisualCssVariables() {
+    const root =
+      document.documentElement;
+
+    const glowScale =
+      airVisualSettings.iconGlow / 100;
+
+const radiusScale =
+  airVisualSettings.glowRadius / 8;
+
+    root.style.setProperty(
+      "--air-icon-glow-opacity",
+      (
+        0.18 * glowScale
+      ).toFixed(3)
+    );
+
+    root.style.setProperty(
+      "--air-icon-glow-blur",
+      airVisualSettings.glowRadius +
+        "px"
+    );
+
+
+    root.style.setProperty(
+      "--air-active-shadow-1",
+      (
+        3 * glowScale * radiusScale
+      ).toFixed(2) + "px"
+    );
+
+    root.style.setProperty(
+      "--air-active-shadow-2",
+      (
+        9 * glowScale * radiusScale
+      ).toFixed(2) + "px"
+    );
+
+    root.style.setProperty(
+      "--air-active-shadow-3",
+      (
+        15 * glowScale * radiusScale * radiusScale
+      ).toFixed(2) + "px"
+    );
+
+
+    root.style.setProperty(
+      "--air-history-shadow-1",
+      (
+        2 * glowScale * radiusScale
+      ).toFixed(2) + "px"
+    );
+
+    root.style.setProperty(
+      "--air-history-shadow-2",
+      (
+        5 * glowScale
+      ).toFixed(2) + "px"
+    );
+
+
+    const pulseScale =
+  Math.max(
+    0,
+    Math.min(
+      1,
+      airVisualSettings.pulse / 100
+    )
+  );
+
+root.style.setProperty(
+  "--air-pulse-opacity",
+  (
+    0.72 * pulseScale
+  ).toFixed(3)
+);
+
+root.style.setProperty(
+  "--air-pulse-start-scale",
+  (
+    1 - 0.28 * pulseScale
+  ).toFixed(3)
+);
+
+root.style.setProperty(
+  "--air-pulse-end-scale",
+  (
+    1 + 0.85 * pulseScale
+  ).toFixed(3)
+);
+  }
+
+
+  function updateAirTrackStyles() {
+    if (!airHistoryLayer) {
+      return;
+    }
+
+    airHistoryLayer.eachLayer(function(layer) {
+      if (
+        !layer ||
+        typeof layer.setStyle !== "function" ||
+        !layer.__airTrackRole
+      ) {
+        return;
+      }
+
+      if (layer.__airTrackRole === "glow") {
+        layer.setStyle({
+          weight: Math.max(
+            4,
+            airVisualSettings.trackWidth * 3.6
+          ),
+          opacity:
+            airVisualSettings.trackGlow / 100
+        });
+      }
+
+      if (layer.__airTrackRole === "core") {
+        layer.setStyle({
+          weight:
+            airVisualSettings.trackWidth,
+          opacity: 0.94
+        });
+      }
+    });
+  }
+
+
+function rerenderAirVisuals() {
+    if (
+      mode !== "air" ||
+      !lastPayload
+    ) {
+      return;
+    }
+
+    if (airVisualRaf !== null) {
+      cancelAnimationFrame(
+        airVisualRaf
+      );
+    }
+
+    airVisualRaf =
+      requestAnimationFrame(
+        function() {
+          airVisualRaf = null;
+
+          if (
+            mode !== "air" ||
+            !lastPayload
+          ) {
+            return;
+          }
+
+          const stats =
+            renderAirPayload(
+              lastPayload
+            );
+
+          renderAirHud(
+            stats
+          );
+        }
+      );
+  }
+
+
+  function applyAirVisualSettings(
+    rerender = false
+  ) {
+    applyAirVisualCssVariables();
+
+    saveAirVisualSettings();
+
+    if (rerender) {
+      rerenderAirVisuals();
+    }
+  }
+
+
+  function updateAirVisualPanelValues() {
+    const values = {
+      "air-icon-glow-slider":
+        airVisualSettings.iconGlow,
+
+      "air-glow-radius-slider":
+        airVisualSettings.glowRadius,
+
+      "air-pulse-slider":
+        airVisualSettings.pulse,
+
+      "air-track-glow-slider":
+        airVisualSettings.trackGlow,
+
+      "air-track-width-slider":
+        airVisualSettings.trackWidth
+    };
+
+    Object.entries(values)
+      .forEach(function(entry) {
+        const input =
+          $(entry[0]);
+
+        if (input) {
+          input.value =
+            entry[1];
+        }
+      });
+
+
+    const displays = {
+      "air-icon-glow-value":
+        Math.round(
+          airVisualSettings.iconGlow
+        ),
+
+      "air-glow-radius-value":
+        airVisualSettings.glowRadius,
+
+      "air-pulse-value":
+        Math.round(
+          airVisualSettings.pulse
+        ),
+
+      "air-track-glow-value":
+        Math.round(
+          airVisualSettings.trackGlow
+        ),
+
+      "air-track-width-value":
+        Number(
+          airVisualSettings.trackWidth
+        ).toFixed(1)
+    };
+
+    Object.entries(displays)
+      .forEach(function(entry) {
+        const element =
+          $(entry[0]);
+
+        if (element) {
+          element.textContent =
+            entry[1];
+        }
+      });
+  }
+
+
+  function bindAirVisualSlider(
+    id,
+    valueId,
+    key,
+    formatter
+  ) {
+    const slider = $(id);
+
+    if (!slider) {
+      return;
+    }
+
+    slider.addEventListener(
+      "input",
+      function() {
+        airVisualSettings[key] =
+          Number(this.value);
+
+        const valueElement =
+          $(valueId);
+
+        if (valueElement) {
+          valueElement.textContent =
+            formatter(
+              airVisualSettings[key]
+            );
+        }
+
+        applyAirVisualSettings(false);
+
+    if (
+      key === "trackGlow" ||
+      key === "trackWidth"
+    ) {
+      updateAirTrackStyles();
+    }
+      }
+    );
+  }
+
+
+  function ensureAirVisualSettingsPanel() {
+    if (
+      airVisualSettingsControl ||
+      typeof L === "undefined" ||
+      typeof map === "undefined"
+    ) {
+      return;
+    }
+
+    airVisualSettingsControl =
+      L.control({
+        position: "topleft"
+      });
+
+
+    airVisualSettingsControl.onAdd =
+      function() {
+        const div =
+          L.DomUtil.create(
+            "div",
+            "control-box"
+          );
+
+        div.id =
+          "air-visual-settings-panel";
+
+        div.style.width =
+          "270px";
+
+        div.style.display =
+          "none";
+
+
+        div.innerHTML = `
+          <div class="section-title">
+            Air Visual Params
+          </div>
+
+          <label class="small-label">
+            Icon glow
+            <span id="air-icon-glow-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-icon-glow-slider"
+            min="0"
+            max="150"
+            step="1"
+          >
+
+
+          <label class="small-label">
+            Glow radius
+            <span id="air-glow-radius-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-glow-radius-slider"
+            min="0"
+            max="20"
+            step="1"
+          >
+
+
+          <label class="small-label">
+            Pulse
+            <span id="air-pulse-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-pulse-slider"
+            min="0"
+            max="100"
+            step="1"
+          >
+
+
+          <label class="small-label">
+            Track glow
+            <span id="air-track-glow-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-track-glow-slider"
+            min="0"
+            max="100"
+            step="1"
+          >
+
+
+          <label class="small-label">
+            Track width
+            <span id="air-track-width-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-track-width-slider"
+            min="0.5"
+            max="5"
+            step="0.1"
+          >
+
+
+          <button id="reset-air-visual-settings">
+            Скинути
+          </button>
+        `;
+
+
+        L.DomEvent.disableClickPropagation(
+          div
+        );
+
+        L.DomEvent.disableScrollPropagation(
+          div
+        );
+
+
+        div
+          .querySelectorAll(
+            "input, button, label"
+          )
+          .forEach(function(element) {
+
+            [
+              "mousedown",
+              "touchstart",
+              "pointerdown",
+              "dblclick",
+              "wheel"
+            ].forEach(function(eventName) {
+
+              L.DomEvent.on(
+                element,
+                eventName,
+                L.DomEvent.stopPropagation
+              );
+
+            });
+          });
+
+
+        return div;
+      };
+
+
+    airVisualSettingsControl.addTo(
+      map
+    );
+
+
+    bindAirVisualSlider(
+      "air-icon-glow-slider",
+      "air-icon-glow-value",
+      "iconGlow",
+      function(value) {
+        return Math.round(value);
+      }
+    );
+
+    bindAirVisualSlider(
+      "air-glow-radius-slider",
+      "air-glow-radius-value",
+      "glowRadius",
+      function(value) {
+        return Math.round(value);
+      }
+    );
+
+    bindAirVisualSlider(
+      "air-pulse-slider",
+      "air-pulse-value",
+      "pulse",
+      function(value) {
+        return Math.round(value);
+      }
+    );
+
+    bindAirVisualSlider(
+      "air-track-glow-slider",
+      "air-track-glow-value",
+      "trackGlow",
+      function(value) {
+        return Math.round(value);
+      }
+    );
+
+    bindAirVisualSlider(
+      "air-track-width-slider",
+      "air-track-width-value",
+      "trackWidth",
+      function(value) {
+        return Number(value)
+          .toFixed(1);
+      }
+    );
+
+
+    const reset =
+      $("reset-air-visual-settings");
+
+    if (reset) {
+      reset.addEventListener(
+        "click",
+        function(event) {
+          event.preventDefault();
+          event.stopPropagation();
+
+          airVisualSettings = {
+            ...AIR_VISUAL_DEFAULTS
+          };
+
+          updateAirVisualPanelValues();
+
+          applyAirVisualSettings(
+            true
+          );
+        }
+      );
+    }
+
+
+    updateAirVisualPanelValues();
+  }
+
+
+  function setAirVisualPanelVisible(
+    visible
+  ) {
+    ensureAirVisualSettingsPanel();
+
+    const panel =
+      $("air-visual-settings-panel");
+
+    if (!panel) {
+      return;
+    }
+
+    panel.style.display =
+      visible
+        ? "block"
+        : "none";
+  }
+
+
+  function toggleAirVisualPanel() {
+    ensureAirVisualSettingsPanel();
+
+    const panel =
+      $("air-visual-settings-panel");
+
+    if (!panel) {
+      return;
+    }
+
+    setAirVisualPanelVisible(
+      panel.style.display === "none"
+    );
+  }
+
+
+  function installAirSettingsButtonHook() {
+    const button =
+      $("toggle-heat-settings");
+
+    if (
+      !button ||
+      button.dataset.airHookInstalled ===
+        "1"
+    ) {
+      return;
+    }
+
+    button.dataset.airHookInstalled =
+      "1";
+
+
+    /*
+     * Capture phase is intentional.
+     *
+     * In MINE mode we do nothing and the original
+     * index.html handler opens HEATMAP PARAMS.
+     *
+     * In AIR mode we stop that handler and open
+     * AIR VISUAL PARAMS instead.
+     */
+    button.addEventListener(
+      "click",
+      function(event) {
+        if (mode !== "air") {
+          return;
+        }
+
+        event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
+
+        toggleAirVisualPanel();
+      },
+      true
+    );
+  }
+
 
   function escapeHtml(value) {
     return String(value == null ? "" : value)
@@ -535,81 +1285,874 @@
         : 8;
 
     const scale = Math.pow(
-      1.18,
+      1.14,
       zoom - 8
     );
 
     if (active) {
       return Math.round(
         clampThreatSize(
-          28 * scale,
-          18,
-          46
+          22 * scale,
+          14,
+          32
         )
       );
     }
 
     return Math.round(
       clampThreatSize(
-        15 * scale,
-        9,
-        24
+        11 * scale,
+        7,
+        17
       )
     );
   }
 
 
-  function createThreatIcon(track, active) {
+  function normalizedReportedCount(reportedCount) {
+    let count = Number(reportedCount);
+    if (!Number.isFinite(count) || count < 1) count = 1;
+    return Math.max(1, Math.min(50, Math.round(count)));
+  }
+
+  function threatIconBoxSize(active, reportedCount = 1) {
+    const baseSize = threatIconSize(active);
+    const count = normalizedReportedCount(reportedCount);
+    return count > 1 ? Math.round(baseSize * 1.42) : baseSize;
+  }
+
+  function createThreatIcon(
+    track,
+    active,
+    reportedCount = 1,
+    screenOffset = null
+  ) {
+    const type = resolveThreatVisualType(track);
+    const visual = THREAT_VISUALS[type] || THREAT_VISUALS.default;
+    const baseSize = threatIconSize(active);
+    const count = normalizedReportedCount(reportedCount);
+    const grouped = count > 1;
+    const boxSize = threatIconBoxSize(active, count);
+    const itemSize = grouped ? Math.round(baseSize * 0.66) : baseSize;
+    const visibleCount = count <= 4 ? count : 3;
+    const layouts = {
+      1: [[50, 50]],
+      2: [[32, 50], [68, 50]],
+      3: [[50, 28], [31, 68], [69, 68]],
+      4: [[31, 31], [69, 31], [31, 69], [69, 69]]
+    };
+    const positions = layouts[visibleCount] || layouts[3];
+    const symbols = positions.map(function(position) {
+      return `
+        <div class="air-threat-group-item" style="width:${itemSize}px;height:${itemSize}px;left:${position[0]}%;top:${position[1]}%;">
+          ${threatSvg(visual.shape)}
+        </div>`;
+    }).join("");
+    const badge = count > 4 ? `<div class="air-threat-count-badge">×${count}</div>` : "";
+    const cssClass = active ? "air-threat-symbol-active" : "air-threat-symbol-history";
+    const offsetX = screenOffset && Number.isFinite(Number(screenOffset.x)) ? Number(screenOffset.x) : 0;
+    const offsetY = screenOffset && Number.isFinite(Number(screenOffset.y)) ? Number(screenOffset.y) : 0;
+    const iconAnchorX = boxSize / 2 - offsetX;
+    const iconAnchorY = boxSize / 2 - offsetY;
+    return L.divIcon({
+      className: "",
+      html: `
+        <div class="air-threat-symbol ${cssClass} ${grouped ? "air-threat-symbol-group" : ""}" style="width:${boxSize}px;height:${boxSize}px;color:${visual.color};">
+          <div class="air-threat-symbol-glow"></div>
+          ${symbols}
+          ${badge}
+        </div>`,
+      iconSize: [boxSize, boxSize],
+      iconAnchor: [iconAnchorX, iconAnchorY],
+      popupAnchor: [-offsetX, -(boxSize / 2 + 4 + offsetY)]
+    });
+  }
+
+
+
+  const AIR_TERMINAL_FADE_MS =
+    30 * 60 * 1000;
+
+
+  function terminalTypeLabel(type) {
+    switch (type) {
+      case "fallen_reported":
+        return "SOURCE REPORTED FALL / IMPACT";
+
+      case "intercepted_reported":
+        return "SOURCE REPORTED INTERCEPTION";
+
+      case "lost_tracking":
+        return "SOURCE REPORTED LOSS OF TRACKING";
+
+      default:
+        return "SOURCE TERMINAL STATUS";
+    }
+  }
+
+
+  function terminalAgeMs(terminal) {
+    if (
+      !terminal ||
+      !terminal.telegram_date
+    ) {
+      return Infinity;
+    }
+
+    const time =
+      new Date(
+        terminal.telegram_date
+      ).getTime();
+
+    if (!Number.isFinite(time)) {
+      return Infinity;
+    }
+
+    return Math.max(
+      0,
+      Date.now() - time
+    );
+  }
+
+
+  function terminalLiveOpacity(
+    terminal
+  ) {
+    const age =
+      terminalAgeMs(
+        terminal
+      );
+
+    if (
+      !Number.isFinite(age) ||
+      age >= AIR_TERMINAL_FADE_MS
+    ) {
+      return 0;
+    }
+
+    return Math.max(
+      0,
+      Math.min(
+        1,
+        1 -
+          age /
+          AIR_TERMINAL_FADE_MS
+      )
+    );
+  }
+
+
+  function terminalStatusColor(
+    type
+  ) {
+    switch (type) {
+      case "fallen_reported":
+        return "#ff8a3d";
+
+      case "intercepted_reported":
+        return "#ff4f78";
+
+      case "lost_tracking":
+        return "#ffd84d";
+
+      default:
+        return "#ffd84d";
+    }
+  }
+
+
+  function terminalBackgroundSvg(
+    type
+  ) {
+
+    /*
+     * IMPORTANT:
+     *
+     * These graphics describe SOURCE STATUS,
+     * not a physical impact/interception coordinate.
+     */
+
+
+    if (
+      type ===
+      "fallen_reported"
+    ) {
+
+      return `
+        <svg viewBox="0 0 100 100">
+
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          >
+
+            <circle
+              cx="50"
+              cy="50"
+              r="18"
+              stroke-width="4"
+            />
+
+            <path
+              d="
+                M50 4 L50 24
+                M50 76 L50 96
+
+                M4 50 L24 50
+                M76 50 L96 50
+
+                M17 17 L31 31
+                M69 69 L83 83
+
+                M83 17 L69 31
+                M31 69 L17 83
+              "
+              stroke-width="5"
+            />
+
+            <path
+              d="
+                M50 32
+                L56 43
+                L68 46
+                L58 54
+                L61 67
+                L50 60
+                L39 67
+                L42 54
+                L32 46
+                L44 43
+                Z
+              "
+              stroke-width="3"
+            />
+
+          </g>
+
+        </svg>
+      `;
+    }
+
+
+    if (
+      type ===
+      "intercepted_reported"
+    ) {
+
+      return `
+        <svg viewBox="0 0 100 100">
+
+          <circle
+            cx="50"
+            cy="50"
+            r="38"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+            stroke-dasharray="7 6"
+          />
+
+          <circle
+            cx="50"
+            cy="50"
+            r="23"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="3"
+          />
+
+          <g
+            fill="none"
+            stroke="currentColor"
+            stroke-width="5"
+            stroke-linecap="round"
+          >
+            <path d="M21 21 L38 38"/>
+            <path d="M62 62 L79 79"/>
+
+            <path d="M79 21 L62 38"/>
+            <path d="M38 62 L21 79"/>
+          </g>
+
+          <circle
+            cx="50"
+            cy="50"
+            r="5"
+            fill="currentColor"
+          />
+
+        </svg>
+      `;
+    }
+
+
+    /*
+     * LOST TRACKING
+     *
+     * Broken radar rings + question mark.
+     */
+
+    return `
+      <svg viewBox="0 0 100 100">
+
+        <g
+          fill="none"
+          stroke="currentColor"
+          stroke-linecap="round"
+        >
+
+          <path
+            d="
+              M14 62
+              A40 40 0 0 1 38 18
+            "
+            stroke-width="4"
+          />
+
+          <path
+            d="
+              M62 18
+              A40 40 0 0 1 86 62
+            "
+            stroke-width="4"
+          />
+
+          <path
+            d="
+              M22 76
+              A40 40 0 0 0 41 88
+            "
+            stroke-width="4"
+          />
+
+          <path
+            d="
+              M59 88
+              A40 40 0 0 0 78 76
+            "
+            stroke-width="4"
+          />
+
+
+          <path
+            d="
+              M28 62
+              A26 26 0 0 1 40 34
+            "
+            stroke-width="3"
+            opacity=".78"
+          />
+
+          <path
+            d="
+              M60 34
+              A26 26 0 0 1 72 62
+            "
+            stroke-width="3"
+            opacity=".78"
+          />
+
+        </g>
+
+
+        <text
+          x="50"
+          y="62"
+          text-anchor="middle"
+          font-size="35"
+          font-family="monospace"
+          font-weight="700"
+          fill="currentColor"
+        >?</text>
+
+      </svg>
+    `;
+  }
+
+
+  function createTerminalIcon(
+    track,
+    terminal
+  ) {
     const type =
-      resolveThreatVisualType(track);
+      resolveThreatVisualType({
+        threats:
+          (
+            terminal &&
+            Array.isArray(
+              terminal.threats
+            )
+          )
+            ? terminal.threats
+            : (
+                (
+                  track &&
+                  Array.isArray(
+                    track.threats
+                  )
+                )
+                  ? track.threats
+                  : []
+              )
+      });
+
 
     const visual =
       THREAT_VISUALS[type] ||
       THREAT_VISUALS.default;
 
-    const size =
-      threatIconSize(active);
 
-    const cssClass =
-      active
-        ? "air-threat-symbol-active"
-        : "air-threat-symbol-history";
+    const baseSize =
+      threatIconSize(
+        false
+      );
+
+
+    const boxSize =
+      Math.round(
+        clampThreatSize(
+          baseSize * 2.45,
+          24,
+          44
+        )
+      );
+
+
+    const threatSize =
+      Math.round(
+        boxSize * 0.46
+      );
+
+
+    const opacity =
+      terminalLiveOpacity(
+        terminal
+      );
+
+
+    const terminalType =
+      (
+        terminal &&
+        terminal.type
+      )
+        ? terminal.type
+        : "lost_tracking";
+
+
+    const preliminary =
+      Boolean(
+        terminal &&
+        terminal.confidence ===
+          "preliminary"
+      );
+
+
+    const statusColor =
+      terminalStatusColor(
+        terminalType
+      );
+
 
     return L.divIcon({
       className: "",
+
       html: `
         <div
-          class="air-threat-symbol ${cssClass}"
+          class="
+            air-terminal-marker
+            ${
+              preliminary
+                ? "air-terminal-preliminary"
+                : ""
+            }
+          "
           style="
-            width:${size}px;
-            height:${size}px;
-            color:${visual.color};
+            width:${boxSize}px;
+            height:${boxSize}px;
+            opacity:${opacity.toFixed(3)};
           "
         >
-          <div class="air-threat-symbol-glow"></div>
 
-          <div class="air-threat-symbol-svg">
-            ${threatSvg(visual.shape)}
+          <div
+            class="air-terminal-background"
+            style="
+              color:${statusColor};
+            "
+          >
+            ${
+              terminalBackgroundSvg(
+                terminalType
+              )
+            }
           </div>
+
+
+          <div
+            class="air-terminal-threat"
+            style="
+              width:${threatSize}px;
+              height:${threatSize}px;
+              color:${visual.color};
+            "
+          >
+            ${
+              threatSvg(
+                visual.shape
+              )
+            }
+          </div>
+
+
+          ${
+            (
+              terminal &&
+              Number(
+                terminal.count
+              ) > 1
+            )
+              ? `
+                <div
+                  class="air-terminal-count-badge"
+                  style="
+                    color:${visual.color};
+                  "
+                >
+                  ×${
+                    normalizedReportedCount(
+                      terminal.count
+                    )
+                  }
+                </div>
+              `
+              : ""
+          }
+
         </div>
       `,
+
       iconSize: [
-        size,
-        size
+        boxSize,
+        boxSize
       ],
+
       iconAnchor: [
-        size / 2,
-        size / 2
+        boxSize / 2,
+        boxSize / 2
       ],
+
       popupAnchor: [
         0,
-        -(size / 2 + 4)
+        -(
+          boxSize / 2 +
+          5
+        )
       ]
     });
   }
 
 
-  function updateThreatMarkerScale() {
+  function buildTerminalPopupHtml(
+    thread,
+    track,
+    terminal
+  ) {
+    const place =
+      (
+        terminal &&
+        terminal.last_place
+      )
+        ? terminal.last_place
+        : {};
+
+
+    const report =
+      (
+        terminal &&
+        terminal.source_text
+      )
+        ? terminal.source_text
+        : "";
+
+
+    const terminalThreat =
+      (
+        terminal &&
+        Array.isArray(
+          terminal.threats
+        ) &&
+        terminal.threats[0]
+      )
+        ? terminal.threats[0]
+        : null;
+
+
+    const trackThreat =
+      (
+        track &&
+        Array.isArray(
+          track.threats
+        ) &&
+        track.threats[0]
+      )
+        ? track.threats[0]
+        : null;
+
+
+    const threatName =
+      threatLabel({
+        threat:
+          terminalThreat ||
+          trackThreat,
+
+        threats:
+          (
+            terminal &&
+            Array.isArray(
+              terminal.threats
+            )
+          )
+            ? terminal.threats
+            : (
+                (
+                  track &&
+                  Array.isArray(
+                    track.threats
+                  )
+                )
+                  ? track.threats
+                  : []
+              )
+      });
+
+
+    const threatSpecified =
+      Boolean(
+        terminalThreat ||
+        trackThreat
+      );
+
+
+    let html =
+      "<b>" +
+      escapeHtml(
+        threatSpecified
+          ? threatName
+          : "Тип цілі: не визначений джерелом"
+      ) +
+      "</b><br>" +
+
+      '<span style="color:var(--amber)">' +
+
+      escapeHtml(
+        terminalTypeLabel(
+          terminal &&
+          terminal.type
+        )
+      ) +
+
+      "</span><br>" +
+
+      "Остання підтверджена джерелом позиція: " +
+
+      escapeHtml(
+        place.canonical_name ||
+        place.id ||
+        "—"
+      ) +
+
+      "<br>" +
+
+      "Час terminal-повідомлення: " +
+
+      formatDate(
+        terminal &&
+        terminal.telegram_date
+      );
+
+
+    if (
+      terminal &&
+      terminal.confidence ===
+        "preliminary"
+    ) {
+      html +=
+        '<br><span style="color:var(--text-dim)">' +
+        "Статус: попереднє повідомлення джерела" +
+        "</span>";
+    }
+
+
+    if (
+      terminal &&
+      Number(
+        terminal.count
+      ) > 1
+    ) {
+      html +=
+        "<br>Кількість: " +
+        escapeHtml(
+          terminal.count
+        );
+    }
+
+
+    if (
+      track &&
+      track.track_id
+    ) {
+      html +=
+        "<br>Track: " +
+        escapeHtml(
+          track.track_id
+        );
+    }
+
+
+    if (
+      thread &&
+      thread.root_message_id
+    ) {
+      html +=
+        "<br>Thread: " +
+        escapeHtml(
+          thread.root_message_id
+        );
+    }
+
+
+    if (
+      terminal &&
+      terminal.message_id
+    ) {
+      html +=
+        "<br>Message: " +
+        escapeHtml(
+          terminal.message_id
+        );
+    }
+
+
+    if (report) {
+      html +=
+        '<br><br><span style="color:var(--text-dim)">' +
+        "SOURCE REPORT" +
+        "</span><br>" +
+
+        escapeHtml(
+          report
+        ).replace(
+          /\n/g,
+          "<br>"
+        );
+    }
+
+
+    html +=
+      '<br><br><span style="color:var(--text-dim)">' +
+      "Маркер показує останню однозначну позицію, повідомлену джерелом до terminal-статусу. " +
+      "Це не точна координата падіння або перехоплення." +
+      "</span>";
+
+
+    return html;
+  }
+
+
+  function addTerminalMarker(
+    thread,
+    track
+  ) {
+    const terminal =
+      track &&
+      track.current_terminal;
+
+
+    if (
+      !terminal ||
+      terminal.drawable !== true ||
+      terminal.superseded_by_message_id
+    ) {
+      return false;
+    }
+
+
+    const opacity =
+      terminalLiveOpacity(
+        terminal
+      );
+
+
+    if (opacity <= 0) {
+      return false;
+    }
+
+
+    const latlng =
+      geometryToLatLng(
+        terminal.last_place
+      );
+
+
+    if (!latlng) {
+      return false;
+    }
+
+
+    const marker =
+      L.marker(
+        latlng,
+        {
+          icon:
+            createTerminalIcon(
+              track,
+              terminal
+            ),
+
+          keyboard: true,
+          riseOnHover: true,
+          zIndexOffset: 250
+        }
+      );
+
+
+    marker.__airTerminalTrack =
+      track;
+
+    marker.__airTerminalEvent =
+      terminal;
+
+
+    marker.bindPopup(
+      buildTerminalPopupHtml(
+        thread,
+        track,
+        terminal
+      ),
+      {
+        maxWidth: 390
+      }
+    );
+
+
+    installMarkerClickReticle(
+      marker
+    );
+
+
+    marker.addTo(
+      airTerminalLayer
+    );
+
+
+    return true;
+  }
+
+
+function updateThreatMarkerScale() {
+    reflowCurrentMarkerLayer();
+
     if (airMarkerLayer) {
       airMarkerLayer.eachLayer(function(layer) {
         if (
@@ -619,7 +2162,9 @@
           layer.setIcon(
             createThreatIcon(
               layer.__airThreatTrack,
-              true
+              true,
+              layer.__airThreatCount || 1,
+              layer.__airThreatOffset || null
             )
           );
         }
@@ -635,7 +2180,26 @@
           layer.setIcon(
             createThreatIcon(
               layer.__airThreatTrack,
-              false
+              false,
+              layer.__airThreatCount || 1,
+              layer.__airThreatOffset || null
+            )
+          );
+        }
+      });
+    }
+
+    if (airTerminalLayer) {
+      airTerminalLayer.eachLayer(function(layer) {
+        if (
+          typeof layer.setIcon === "function" &&
+          layer.__airTerminalTrack &&
+          layer.__airTerminalEvent
+        ) {
+          layer.setIcon(
+            createTerminalIcon(
+              layer.__airTerminalTrack,
+              layer.__airTerminalEvent
             )
           );
         }
@@ -685,13 +2249,77 @@
         overflow: visible;
       }
 
-      .air-threat-symbol-glow {
+      .air-threat-symbol-group {
+    overflow: visible;
+  }
+
+  .air-threat-group-item {
+    position: absolute;
+    transform: translate(-50%, -50%);
+    z-index: 2;
+    pointer-events: none;
+  }
+
+  .air-threat-group-item svg {
+    width: 100%;
+    height: 100%;
+    display: block;
+    overflow: visible;
+  }
+
+  .air-threat-count-badge {
+    position: absolute;
+
+    right: -4px;
+    bottom: -4px;
+
+    z-index: 4;
+
+    min-width: 20px;
+    height: 18px;
+
+    padding: 1px 4px;
+
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    border:
+      1px solid currentColor;
+
+    border-radius: 5px;
+
+    background:
+      rgba(3, 10, 16, .94);
+
+    color:
+      currentColor;
+
+    font-family:
+      var(--font-mono, monospace);
+
+    font-size: 11px;
+    font-weight: 700;
+    line-height: 1;
+
+    box-shadow:
+      0 0 5px currentColor;
+
+    pointer-events: none;
+  }
+
+  .air-threat-symbol-glow {
         position: absolute;
         inset: 18%;
         border-radius: 50%;
         background: currentColor;
-        opacity: .18;
-        filter: blur(8px);
+        opacity:
+          var(--air-icon-glow-opacity, .18);
+
+        filter:
+          blur(
+            var(--air-icon-glow-blur, 8px)
+          );
         z-index: 1;
         pointer-events: none;
       }
@@ -700,9 +2328,21 @@
         opacity: 1;
 
         filter:
-          drop-shadow(0 0 3px currentColor)
-          drop-shadow(0 0 9px currentColor)
-          drop-shadow(0 0 15px currentColor);
+          drop-shadow(
+            0 0
+            var(--air-active-shadow-1, 3px)
+            currentColor
+          )
+          drop-shadow(
+            0 0
+            var(--air-active-shadow-2, 9px)
+            currentColor
+          )
+          drop-shadow(
+            0 0
+            var(--air-active-shadow-3, 15px)
+            currentColor
+          );
       }
 
       .air-threat-symbol-active::after {
@@ -711,7 +2351,8 @@
         inset: -6px;
         border: 1px solid currentColor;
         border-radius: 50%;
-        opacity: .65;
+        opacity:
+          var(--air-pulse-opacity, .65);
 
         animation:
           airThreatPulse
@@ -724,24 +2365,750 @@
         opacity: .62;
 
         filter:
-          drop-shadow(0 0 2px currentColor)
-          drop-shadow(0 0 5px currentColor);
+          drop-shadow(
+            0 0
+            var(--air-history-shadow-1, 2px)
+            currentColor
+          )
+          drop-shadow(
+            0 0
+            var(--air-history-shadow-2, 5px)
+            currentColor
+          );
       }
 
       @keyframes airThreatPulse {
-        0% {
-          transform: scale(.72);
-          opacity: .72;
-        }
+    0% {
+      transform: scale(
+        var(--air-pulse-start-scale, .72)
+      );
 
-        100% {
-          transform: scale(1.85);
-          opacity: 0;
-        }
+      opacity:
+        var(--air-pulse-opacity, .72);
+    }
+
+    100% {
+      transform: scale(
+        var(--air-pulse-end-scale, 1.85)
+      );
+
+      opacity: 0;
+    }
+  }
+
+
+      .air-terminal-marker {
+        position: relative;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        pointer-events: auto;
+      }
+
+
+      .air-terminal-background {
+        position: absolute;
+
+        inset: -6%;
+
+        z-index: 1;
+
+        opacity: .92;
+
+        filter:
+          drop-shadow(
+            0 0 3px currentColor
+          )
+          drop-shadow(
+            0 0 8px currentColor
+          )
+          drop-shadow(
+            0 0 13px currentColor
+          );
+
+        pointer-events: none;
+      }
+
+
+      .air-terminal-background svg {
+        width: 100%;
+        height: 100%;
+
+        display: block;
+
+        overflow: visible;
+      }
+
+
+      .air-terminal-threat {
+        position: relative;
+
+        z-index: 3;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        filter:
+          drop-shadow(
+            0 0 2px currentColor
+          )
+          drop-shadow(
+            0 0 5px currentColor
+          );
+      }
+
+
+      .air-terminal-threat svg {
+        width: 100%;
+        height: 100%;
+
+        display: block;
+
+        overflow: visible;
+      }
+
+
+      .air-terminal-preliminary
+      .air-terminal-background {
+        opacity: .44;
+      }
+
+
+      .air-terminal-count-badge {
+        position: absolute;
+
+        right: -3px;
+        bottom: -3px;
+
+        z-index: 4;
+
+        min-width: 19px;
+        height: 17px;
+
+        padding: 1px 4px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        border:
+          1px solid currentColor;
+
+        border-radius: 5px;
+
+        background:
+          rgba(3, 10, 16, .94);
+
+        color:
+          currentColor;
+
+        font-family:
+          var(--font-mono, monospace);
+
+        font-size: 10px;
+        font-weight: 700;
+        line-height: 1;
+
+        box-shadow:
+          0 0 5px currentColor;
+
+        pointer-events: none;
+      }
+
+
+      .air-terminal-preliminary {
+        filter:
+          saturate(.72);
       }
     `;
 
     document.head.appendChild(style);
+  }
+
+
+  // =========================================================
+  // AIR THREAT LEGEND
+  // =========================================================
+
+  const AIR_LEGEND_ITEMS = [
+    {
+      type: "fpv",
+      label: "FPV"
+    },
+    {
+      type: "shahed",
+      label: "SHAHED"
+    },
+    {
+      type: "shahed_reactive",
+      label: "REACTIVE SHAHED"
+    },
+    {
+      type: "molniya",
+      label: "MOLNIYA"
+    },
+    {
+      type: "kab",
+      label: "KAB"
+    },
+    {
+      type: "missile",
+      label: "MISSILE"
+    },
+    {
+      type: "recon_uav_unknown",
+      label: "RECON UAV"
+    },
+    {
+      type: "tactical_aviation",
+      label: "TACTICAL AVIATION"
+    }
+  ];
+
+
+  function legendThreatSvg(type) {
+    const visual =
+      THREAT_VISUALS[type] ||
+      THREAT_VISUALS.default;
+
+    return `
+      <div
+        class="air-legend-symbol"
+        style="color:${visual.color}"
+      >
+        ${threatSvg(visual.shape)}
+      </div>
+    `;
+  }
+
+
+  function installAirLegendStyles() {
+    if (
+      document.getElementById(
+        "air-legend-styles"
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement("style");
+
+    style.id =
+      "air-legend-styles";
+
+    style.textContent = `
+      #air-threat-legend {
+        position: absolute;
+        right: 18px;
+        bottom: 28px;
+        z-index: 1050;
+
+        width: 218px;
+
+        background:
+          rgba(2, 16, 22, .92);
+
+        border:
+          1px solid rgba(53, 230, 255, .28);
+
+        box-shadow:
+          0 0 18px rgba(0, 220, 255, .08),
+          inset 0 0 14px rgba(0, 220, 255, .025);
+
+        backdrop-filter:
+          blur(7px);
+
+        color:
+          #bcebf2;
+
+        font-family:
+          inherit;
+
+        display: none;
+
+        user-select: none;
+      }
+
+
+      #air-threat-legend.air-legend-collapsed {
+        width: 155px;
+      }
+
+
+      .air-legend-header {
+        height: 34px;
+
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+
+        padding:
+          0 9px 0 11px;
+
+        border-bottom:
+          1px solid rgba(53, 230, 255, .17);
+
+        color:
+          #35e6ff;
+
+        font-size:
+          10px;
+
+        letter-spacing:
+          .12em;
+
+        font-weight:
+          700;
+      }
+
+
+      .air-legend-toggle {
+        width: 24px;
+        height: 24px;
+
+        border:
+          1px solid rgba(53, 230, 255, .22);
+
+        background:
+          rgba(53, 230, 255, .04);
+
+        color:
+          #35e6ff;
+
+        cursor: pointer;
+
+        font-family:
+          inherit;
+
+        line-height:
+          20px;
+
+        padding: 0;
+      }
+
+
+      .air-legend-toggle:hover {
+        background:
+          rgba(53, 230, 255, .12);
+      }
+
+
+      .air-legend-body {
+        padding:
+          8px 10px 9px;
+      }
+
+
+      .air-legend-collapsed
+      .air-legend-body {
+        display: none;
+      }
+
+
+      .air-legend-row {
+        height: 27px;
+
+        display: grid;
+
+        grid-template-columns:
+          28px 1fr;
+
+        align-items: center;
+
+        column-gap: 7px;
+      }
+
+
+      .air-legend-symbol {
+        width: 22px;
+        height: 22px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        filter:
+          drop-shadow(
+            0 0 3px currentColor
+          )
+          drop-shadow(
+            0 0 6px currentColor
+          );
+      }
+
+
+      .air-legend-symbol svg {
+        width: 100%;
+        height: 100%;
+        display: block;
+        overflow: visible;
+      }
+
+
+      .air-legend-label {
+        font-size:
+          9px;
+
+        letter-spacing:
+          .08em;
+
+        color:
+          #9fcbd2;
+
+        white-space:
+          nowrap;
+      }
+
+
+      .air-legend-separator {
+        height: 1px;
+
+        margin:
+          7px 0 7px;
+
+        background:
+          rgba(53, 230, 255, .12);
+      }
+
+
+      .air-legend-status-row {
+        display: grid;
+
+        grid-template-columns:
+          28px 1fr;
+
+        align-items: center;
+
+        min-height:
+          24px;
+
+        column-gap:
+          7px;
+
+        color:
+          #789da4;
+
+        font-size:
+          8px;
+
+        letter-spacing:
+          .06em;
+      }
+
+
+      .air-legend-current {
+        width: 12px;
+        height: 12px;
+
+        margin-left: 5px;
+
+        border-radius: 50%;
+
+        border:
+          1px solid #35e6ff;
+
+        box-shadow:
+          0 0 7px #35e6ff;
+
+        position: relative;
+      }
+
+
+      .air-legend-current::after {
+        content: "";
+
+        position: absolute;
+
+        inset: -5px;
+
+        border:
+          1px solid rgba(53, 230, 255, .42);
+
+        border-radius: 50%;
+      }
+
+
+      .air-legend-history {
+        width: 7px;
+        height: 7px;
+
+        margin-left: 7px;
+
+        border-radius: 50%;
+
+        background:
+          #35e6ff;
+
+        box-shadow:
+          0 0 5px #35e6ff;
+
+        opacity: .62;
+      }
+
+
+      .air-legend-track {
+        width: 23px;
+        height: 2px;
+
+        margin-left: 1px;
+
+        border-radius: 3px;
+
+        background:
+          #ff496b;
+
+        box-shadow:
+          0 0 5px rgba(255, 73, 107, .7);
+      }
+
+
+      .air-legend-terminal {
+        width: 20px;
+        height: 20px;
+
+        margin-left: 2px;
+
+        display: flex;
+        align-items: center;
+        justify-content: center;
+
+        font-family:
+          var(--font-mono, monospace);
+
+        font-weight: 700;
+
+        line-height: 1;
+
+        border-radius: 50%;
+      }
+
+
+      .air-legend-terminal-lost {
+        color: #ffd84d;
+
+        border:
+          2px dashed currentColor;
+
+        font-size: 12px;
+
+        box-shadow:
+          0 0 6px currentColor;
+      }
+
+
+      .air-legend-terminal-intercepted {
+        color: #ff4f78;
+
+        border:
+          1px dashed currentColor;
+
+        font-size: 14px;
+
+        box-shadow:
+          0 0 6px currentColor;
+      }
+
+
+      .air-legend-terminal-fallen {
+        color: #ff8a3d;
+
+        font-size: 17px;
+
+        text-shadow:
+          0 0 5px currentColor;
+      }
+
+
+      @media (
+        max-width: 700px
+      ) {
+        #air-threat-legend {
+          right: 8px;
+          bottom: 18px;
+
+          transform:
+            scale(.9);
+
+          transform-origin:
+            bottom right;
+        }
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+
+  function buildAirLegend() {
+    if (
+      document.getElementById(
+        "air-threat-legend"
+      )
+    ) {
+      return;
+    }
+
+    installAirLegendStyles();
+
+    const legend =
+      document.createElement("div");
+
+    legend.id =
+      "air-threat-legend";
+
+    const threatRows =
+      AIR_LEGEND_ITEMS
+        .map(function(item) {
+          return `
+            <div class="air-legend-row">
+              ${legendThreatSvg(item.type)}
+
+              <div class="air-legend-label">
+                ${escapeHtml(item.label)}
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+
+    legend.innerHTML = `
+      <div class="air-legend-header">
+        <span>AIR THREATS</span>
+
+        <button
+          type="button"
+          class="air-legend-toggle"
+          title="Згорнути легенду"
+        >
+          −
+        </button>
+      </div>
+
+      <div class="air-legend-body">
+        ${threatRows}
+
+        <div class="air-legend-separator"></div>
+
+        <div class="air-legend-status-row">
+          <div class="air-legend-current"></div>
+          <span>CURRENT POSITION</span>
+        </div>
+
+        <div class="air-legend-status-row">
+          <div class="air-legend-history"></div>
+          <span>HISTORICAL POSITION</span>
+        </div>
+
+        <div class="air-legend-status-row">
+          <div class="air-legend-track"></div>
+          <span>REPORTED TRACK</span>
+        </div>
+
+
+        <div class="air-legend-separator"></div>
+
+
+        <div class="air-legend-status-row">
+          <div
+            class="
+              air-legend-terminal
+              air-legend-terminal-lost
+            "
+          >?</div>
+
+          <span>LOST TRACKING</span>
+        </div>
+
+
+        <div class="air-legend-status-row">
+          <div
+            class="
+              air-legend-terminal
+              air-legend-terminal-intercepted
+            "
+          >×</div>
+
+          <span>INTERCEPTED</span>
+        </div>
+
+
+        <div class="air-legend-status-row">
+          <div
+            class="
+              air-legend-terminal
+              air-legend-terminal-fallen
+            "
+          >✦</div>
+
+          <span>FALLEN / IMPACT</span>
+        </div>
+
+      </div>
+    `;
+
+    const toggle =
+      legend.querySelector(
+        ".air-legend-toggle"
+      );
+
+    toggle.addEventListener(
+      "click",
+      function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        const collapsed =
+          legend.classList.toggle(
+            "air-legend-collapsed"
+          );
+
+        toggle.textContent =
+          collapsed ? "+" : "−";
+
+        toggle.title =
+          collapsed
+            ? "Розгорнути легенду"
+            : "Згорнути легенду";
+      }
+    );
+
+    document.body.appendChild(
+      legend
+    );
+  }
+
+
+  function showAirLegend() {
+    buildAirLegend();
+
+    const legend =
+      document.getElementById(
+        "air-threat-legend"
+      );
+
+    if (legend) {
+      legend.style.display =
+        "block";
+    }
+  }
+
+
+  function hideAirLegend() {
+    const legend =
+      document.getElementById(
+        "air-threat-legend"
+      );
+
+    if (legend) {
+      legend.style.display =
+        "none";
+    }
   }
 
 
@@ -751,18 +3118,21 @@
     airGlowLayer = L.layerGroup();
     airCoreLayer = L.layerGroup();
     airHistoryLayer = L.layerGroup();
+    airTerminalLayer = L.layerGroup();
     airMarkerLayer = L.layerGroup();
 
     airLayerGroup = L.layerGroup([
       airGlowLayer,
       airCoreLayer,
       airHistoryLayer,
+      airTerminalLayer,
       airMarkerLayer
     ]);
   }
 
   function clearAirLayers() {
     if (airMarkerLayer) airMarkerLayer.clearLayers();
+    if (airTerminalLayer) airTerminalLayer.clearLayers();
     if (airHistoryLayer) airHistoryLayer.clearLayers();
     if (airGlowLayer) airGlowLayer.clearLayers();
     if (airCoreLayer) airCoreLayer.clearLayers();
@@ -884,6 +3254,336 @@
     return track && track.active === true;
   }
 
+
+  function eventTimestampMs(event) {
+    if (
+      !event ||
+      !event.telegram_date
+    ) {
+      return null;
+    }
+
+    const value =
+      new Date(
+        event.telegram_date
+      ).getTime();
+
+    return Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+
+  function isMeaningfulAirObservation(
+    event
+  ) {
+    if (
+      !event ||
+      typeof event !== "object"
+    ) {
+      return false;
+    }
+
+
+    /*
+     * Closing/terminal messages must not artificially
+     * extend the LIVE lifetime of an object.
+     */
+    if (
+      event.status === "ended" ||
+      event.status === "not_observed" ||
+      event.status === "no_threat" ||
+      event.status === "clear"
+    ) {
+      return false;
+    }
+
+
+    if (
+      Array.isArray(
+        event.places
+      ) &&
+      event.places.length > 0
+    ) {
+      return true;
+    }
+
+
+    if (
+      Array.isArray(
+        event.explicit_threats
+      ) &&
+      event.explicit_threats.length > 0
+    ) {
+      return true;
+    }
+
+
+    if (
+      event.is_continuation ===
+        true
+    ) {
+      return true;
+    }
+
+
+    if (
+      event.status ===
+        "observed_again"
+    ) {
+      return true;
+    }
+
+
+    return false;
+  }
+
+
+  function getTrackLastActivityMs(
+    track
+  ) {
+    if (
+      !track ||
+      !Array.isArray(
+        track.segments
+      )
+    ) {
+      return null;
+    }
+
+
+    let latest = null;
+
+
+    track.segments.forEach(
+      function(segment) {
+
+        (
+          segment.events || []
+        ).forEach(
+          function(event) {
+
+            if (
+              !isMeaningfulAirObservation(
+                event
+              )
+            ) {
+              return;
+            }
+
+
+            const timestamp =
+              eventTimestampMs(
+                event
+              );
+
+
+            if (
+              timestamp !== null &&
+              (
+                latest === null ||
+                timestamp > latest
+              )
+            ) {
+              latest =
+                timestamp;
+            }
+
+          }
+        );
+
+      }
+    );
+
+
+    return latest;
+  }
+
+
+  function trackAgeMs(track) {
+    const lastActivity =
+      getTrackLastActivityMs(
+        track
+      );
+
+    if (lastActivity === null) {
+      return Infinity;
+    }
+
+    return Math.max(
+      0,
+      Date.now() -
+        lastActivity
+    );
+  }
+
+
+  function isTrackFreshActive(
+    track
+  ) {
+    return Boolean(
+      isTrackActive(track) &&
+      trackAgeMs(track) <=
+        AIR_ACTIVE_STALE_MS
+    );
+  }
+
+
+  function airTrackKey(track) {
+    if (!track) {
+      return "";
+    }
+
+    return String(
+      track.track_id ||
+      ""
+    );
+  }
+
+
+  function updateAirTrackModeButton() {
+    const button =
+      $("toggle-air-tracks");
+
+    if (!button) {
+      return;
+    }
+
+    const labels = {
+      selected: "SEL",
+      all: "ALL",
+      off: "OFF"
+    };
+
+    const label =
+      labels[
+        airTrackDisplayMode
+      ] || "SEL";
+
+    button.textContent =
+      label;
+
+    button.title =
+      "Треки: " +
+      label +
+      (
+        airTrackDisplayMode ===
+          "selected"
+          ? " — клікни по цілі"
+          : ""
+      );
+
+    button.dataset.trackMode =
+      airTrackDisplayMode;
+
+    if (
+      airTrackDisplayMode ===
+      "all"
+    ) {
+      button.style.color =
+        "#ff496b";
+
+      button.style.background =
+        "rgba(255,73,107,.10)";
+    }
+
+    else if (
+      airTrackDisplayMode ===
+      "selected"
+    ) {
+      button.style.color =
+        "var(--cyan)";
+
+      button.style.background =
+        "rgba(53,230,255,.08)";
+    }
+
+    else {
+      button.style.color =
+        "var(--text-dim)";
+
+      button.style.background =
+        "";
+    }
+  }
+
+
+  function cycleAirTrackDisplayMode() {
+    if (
+      airTrackDisplayMode ===
+      "selected"
+    ) {
+      airTrackDisplayMode =
+        "all";
+    }
+
+    else if (
+      airTrackDisplayMode ===
+      "all"
+    ) {
+      airTrackDisplayMode =
+        "off";
+    }
+
+    else {
+      airTrackDisplayMode =
+        "selected";
+    }
+
+    updateAirTrackModeButton();
+
+    rerenderAirVisuals();
+  }
+
+
+  function selectAirTrack(
+    track
+  ) {
+    const id =
+      airTrackKey(
+        track
+      );
+
+    if (!id) {
+      return;
+    }
+
+    selectedAirTrackId =
+      id;
+
+    airTrackDisplayMode =
+      "selected";
+
+    reopenSelectedPopup =
+      true;
+
+    updateAirTrackModeButton();
+
+    rerenderAirVisuals();
+  }
+
+
+  function clearSelectedAirTrack() {
+    if (
+      !selectedAirTrackId
+    ) {
+      return;
+    }
+
+    selectedAirTrackId =
+      null;
+
+    reopenSelectedPopup =
+      false;
+
+    if (
+      airTrackDisplayMode ===
+      "selected"
+    ) {
+      rerenderAirVisuals();
+    }
+  }
+
   function getThreads(payload) {
     return payload && Array.isArray(payload.threads)
       ? payload.threads
@@ -928,37 +3628,137 @@
     return [lat, lon];
   }
 
-  function getLatestResolvedObservation(track) {
-    const segments = Array.isArray(track && track.segments)
-      ? track.segments
-      : [];
-
-    for (let s = segments.length - 1; s >= 0; s -= 1) {
-      const events = Array.isArray(segments[s].events)
-        ? segments[s].events
+  function getLatestResolvedObservations(track) {
+    const segments =
+      Array.isArray(
+        track &&
+        track.segments
+      )
+        ? track.segments
         : [];
 
-      for (let e = events.length - 1; e >= 0; e -= 1) {
-        const event = events[e];
-        const places = Array.isArray(event.places)
-          ? event.places
+
+    /*
+     * Find the newest event that contains at least one
+     * source-reported place with resolved geometry.
+     *
+     * IMPORTANT:
+     *
+     * If one Telegram report says:
+     *
+     *   "Молния на Прудянку/Слатино"
+     *
+     * we return BOTH places.
+     *
+     * We do not choose one of them as the exact physical
+     * position of the object.
+     */
+    for (
+      let segmentIndex =
+        segments.length - 1;
+
+      segmentIndex >= 0;
+
+      segmentIndex -= 1
+    ) {
+
+      const segment =
+        segments[
+          segmentIndex
+        ];
+
+      const events =
+        Array.isArray(
+          segment.events
+        )
+          ? segment.events
           : [];
 
-        if (places.length !== 1) continue;
 
-        const latlng = geometryToLatLng(places[0]);
-        if (!latlng) continue;
+      for (
+        let eventIndex =
+          events.length - 1;
 
-        return {
-          event: event,
-          place: places[0],
-          latlng: latlng,
-          segment: segments[s]
-        };
+        eventIndex >= 0;
+
+        eventIndex -= 1
+      ) {
+
+        const event =
+          events[
+            eventIndex
+          ];
+
+        const places =
+          Array.isArray(
+            event.places
+          )
+            ? event.places
+            : [];
+
+
+        const observations =
+          places
+            .map(
+              function(place) {
+
+                const latlng =
+                  geometryToLatLng(
+                    place
+                  );
+
+                if (!latlng) {
+                  return null;
+                }
+
+                return {
+                  event:
+                    event,
+
+                  place:
+                    place,
+
+                  latlng:
+                    latlng,
+
+                  segment:
+                    segment
+                };
+              }
+            )
+            .filter(Boolean);
+
+
+        if (
+          observations.length > 0
+        ) {
+          return observations;
+        }
       }
     }
 
-    return null;
+
+    return [];
+  }
+
+
+  function getLatestResolvedObservation(track) {
+    /*
+     * Compatibility helper for code that only needs
+     * one representative observation.
+     *
+     * LIVE rendering itself uses
+     * getLatestResolvedObservations().
+     */
+    const observations =
+      getLatestResolvedObservations(
+        track
+      );
+
+    return (
+      observations[0] ||
+      null
+    );
   }
 
   function sourceText(event) {
@@ -1017,6 +3817,28 @@
     });
   }
 
+  function currentEndpointIsHiddenFromHistory(
+    currentKeys,
+    key
+  ) {
+    if (!key) {
+      return false;
+    }
+
+    if (
+      currentKeys instanceof Set
+    ) {
+      return currentKeys.has(
+        key
+      );
+    }
+
+    return (
+      key === currentKeys
+    );
+  }
+
+
   function endpointKey(endpoint) {
     const place = endpoint && endpoint.place || {};
     return [
@@ -1034,7 +3856,16 @@
     if (!latlng) return false;
 
     const key = endpointKey(endpoint);
-    if (!key || seenHistory.has(key) || key === currentKey) return false;
+    if (
+      !key ||
+      seenHistory.has(key) ||
+      currentEndpointIsHiddenFromHistory(
+        currentKey,
+        key
+      )
+    ) {
+      return false;
+    }
     seenHistory.add(key);
 
     const event = {
@@ -1100,7 +3931,10 @@
     if (
       !key ||
       seenHistory.has(key) ||
-      key === currentKey
+      currentEndpointIsHiddenFromHistory(
+        currentKey,
+        key
+      )
     ) {
       return false;
     }
@@ -1111,9 +3945,10 @@
       latlng,
       {
         icon: createThreatIcon(
-          track,
-          false
-        ),
+      track,
+      false,
+      event.reported_object_count || 1
+    ),
 
         keyboard: true,
         riseOnHover: true,
@@ -1123,6 +3958,9 @@
 
     marker.__airThreatTrack =
       track;
+
+marker.__airThreatCount =
+  event.reported_object_count || 1;
 
     marker.bindPopup(
       buildPopupHtml(
@@ -1277,8 +4115,14 @@
       points,
       {
         color: "#ff496b",
-        weight: 7.2,
-        opacity: 0.22,
+        weight:
+          Math.max(
+            4,
+            airVisualSettings.trackWidth * 3.6
+          ),
+
+        opacity:
+          airVisualSettings.trackGlow / 100,
         lineCap: "round",
         lineJoin: "round",
         interactive: false
@@ -1289,7 +4133,9 @@
       points,
       {
         color: "#ff496b",
-        weight: 2.0,
+        weight:
+          airVisualSettings.trackWidth,
+
         opacity: 0.94,
         lineCap: "round",
         lineJoin: "round",
@@ -1297,13 +4143,16 @@
       }
     );
 
-    glowLine.addTo(
-      airHistoryLayer
-    );
+    glowLine.__airTrackRole = "glow";
+coreLine.__airTrackRole = "core";
 
-    coreLine.addTo(
-      airHistoryLayer
-    );
+glowLine.addTo(
+  airHistoryLayer
+);
+
+coreLine.addTo(
+  airHistoryLayer
+);
 
     return true;
   }
@@ -1314,68 +4163,256 @@
     track,
     seenEdges
   ) {
-    (track.segments || []).forEach(function (segment) {
-      const sequence = [];
+    /*
+     * HYBRID TRACK LINKING
+     *
+     * Rule 1:
+     * Places inside ONE Telegram report are connected
+     * in their source order.
+     *
+     * Example:
+     *
+     *   "Близнюки/Краснопавлівка"
+     *
+     *   Близнюки ---- Краснопавлівка
+     *
+     *
+     * Rule 2:
+     * Different Telegram reports are connected ONLY
+     * when the newer report explicitly replies to
+     * the previous report via reply_to_message_id.
+     *
+     *
+     * Rule 3:
+     * Reports that merely happen to belong to the
+     * same track/segment but have no Telegram reply
+     * relationship are NEVER connected.
+     */
 
-      (segment.events || []).forEach(function (event) {
-        (event.places || []).forEach(function (place) {
-          const latlng =
-            geometryToLatLng(place);
 
-          if (!latlng) {
-            return;
-          }
+    (track.segments || []).forEach(function(segment) {
 
-          sequence.push({
-            event: event,
-            place: place,
-            latlng: latlng
-          });
-        });
-      });
+      const events =
+        Array.isArray(segment.events)
+          ? segment.events
+          : [];
 
-      for (let i = 0; i < sequence.length - 1; i += 1) {
-        const current =
-          sequence[i];
 
-        const next =
-          sequence[i + 1];
+      // -----------------------------------------------------
+      // Prepare resolved places for every event
+      // -----------------------------------------------------
+
+      const eventInfoById =
+        new Map();
+
+
+      events.forEach(function(event) {
 
         if (
-          !current ||
-          !next ||
-          !current.latlng ||
-          !next.latlng
+          !event ||
+          event.message_id == null
         ) {
-          continue;
+          return;
         }
 
+
+        const resolvedPlaces =
+          (event.places || [])
+            .map(function(place) {
+
+              return {
+                place: place,
+
+                latlng:
+                  geometryToLatLng(
+                    place
+                  )
+              };
+
+            })
+            .filter(function(item) {
+
+              return Boolean(
+                item.latlng
+              );
+
+            });
+
+
+        eventInfoById.set(
+          Number(event.message_id),
+          {
+            event: event,
+            places: resolvedPlaces
+          }
+        );
+
+
+        // ---------------------------------------------------
+        // A. CONNECT PLACES INSIDE THE SAME MESSAGE
+        // ---------------------------------------------------
+
+        for (
+          let i = 0;
+          i < resolvedPlaces.length - 1;
+          i += 1
+        ) {
+
+          const from =
+            resolvedPlaces[i];
+
+          const to =
+            resolvedPlaces[i + 1];
+
+
+          const lineKey = [
+            "same-message",
+
+            track.track_id ||
+              thread.root_message_id ||
+              "unknown-track",
+
+            segment.segment_id ||
+              "unknown-segment",
+
+            event.message_id,
+
+            from.place.id ||
+              from.place.canonical_name ||
+              "from",
+
+            to.place.id ||
+              to.place.canonical_name ||
+              "to"
+          ].join("|");
+
+
+          drawSmoothTrackCurve(
+            from.latlng,
+            to.latlng,
+            lineKey,
+            seenEdges
+          );
+
+        }
+
+      });
+
+
+      // -----------------------------------------------------
+      // B. CONNECT EXPLICIT TELEGRAM REPLIES
+      // -----------------------------------------------------
+
+      events.forEach(function(childEvent) {
+
+        if (!childEvent) {
+          return;
+        }
+
+
+        /*
+         * IMPORTANT:
+         *
+         * Use ONLY the actual Telegram reply field.
+         *
+         * We deliberately do NOT use chronological order
+         * and do NOT use an inferred track relationship.
+         */
+        const replyTo =
+          Number(
+            childEvent.reply_to_message_id
+          );
+
+
+        if (!Number.isFinite(replyTo)) {
+          return;
+        }
+
+
+        const parentInfo =
+          eventInfoById.get(
+            replyTo
+          );
+
+
+        const childInfo =
+          eventInfoById.get(
+            Number(
+              childEvent.message_id
+            )
+          );
+
+
+        if (
+          !parentInfo ||
+          !childInfo
+        ) {
+          return;
+        }
+
+
+        if (
+          parentInfo.places.length === 0 ||
+          childInfo.places.length === 0
+        ) {
+          return;
+        }
+
+
+        /*
+         * Continue from the LAST resolved place
+         * in the parent report...
+         */
+        const from =
+          parentInfo.places[
+            parentInfo.places.length - 1
+          ];
+
+
+        /*
+         * ...to the FIRST resolved place
+         * in the reply report.
+         *
+         * Any additional places inside the reply
+         * were already connected above by Rule A.
+         */
+        const to =
+          childInfo.places[0];
+
+
         const lineKey = [
-          "smooth-track",
+          "telegram-reply",
+
           track.track_id ||
             thread.root_message_id ||
             "unknown-track",
+
           segment.segment_id ||
             "unknown-segment",
-          current.event.message_id ||
-            "m1",
-          current.place.id ||
-            current.place.canonical_name ||
-            "p1",
-          next.event.message_id ||
-            "m2",
-          next.place.id ||
-            next.place.canonical_name ||
-            "p2"
+
+          parentInfo.event.message_id,
+
+          from.place.id ||
+            from.place.canonical_name ||
+            "parent-place",
+
+          childInfo.event.message_id,
+
+          to.place.id ||
+            to.place.canonical_name ||
+            "reply-place"
         ].join("|");
 
+
         drawSmoothTrackCurve(
-          current.latlng,
-          next.latlng,
+          from.latlng,
+          to.latlng,
           lineKey,
           seenEdges
         );
-      }
+
+      });
+
     });
   }
 
@@ -1427,150 +4464,1256 @@
     return true;
   }
 
+  function currentObservationLatLng(
+    observation
+  ) {
+    if (
+      !observation ||
+      !observation.latlng
+    ) {
+      return null;
+    }
+
+    try {
+      return Array.isArray(
+        observation.latlng
+      )
+        ? L.latLng(
+            observation.latlng[0],
+            observation.latlng[1]
+          )
+        : L.latLng(
+            observation.latlng
+          );
+    } catch (error) {
+      return null;
+    }
+  }
+
+
+  function currentMarkerLayoutOffsets(
+    count,
+    spacing
+  ) {
+    if (count <= 1) {
+      return [
+        {
+          x: 0,
+          y: 0
+        }
+      ];
+    }
+
+    if (count === 2) {
+      return [
+        {
+          x: -spacing / 2,
+          y: 0
+        },
+        {
+          x: spacing / 2,
+          y: 0
+        }
+      ];
+    }
+
+    if (count === 3) {
+      const radius =
+        spacing * 0.56;
+
+      return [
+        {
+          x: 0,
+          y: -radius
+        },
+        {
+          x: -radius * 0.87,
+          y: radius * 0.5
+        },
+        {
+          x: radius * 0.87,
+          y: radius * 0.5
+        }
+      ];
+    }
+
+    if (count === 4) {
+      const half =
+        spacing * 0.42;
+
+      return [
+        {
+          x: -half,
+          y: -half
+        },
+        {
+          x: half,
+          y: -half
+        },
+        {
+          x: -half,
+          y: half
+        },
+        {
+          x: half,
+          y: half
+        }
+      ];
+    }
+
+    const radius =
+      Math.max(
+        spacing * 0.78,
+        (
+          count * spacing
+        ) /
+        (
+          2 * Math.PI
+        )
+      );
+
+    return Array.from(
+      {
+        length: count
+      },
+      function(_, index) {
+        const angle =
+          -Math.PI / 2 +
+          (
+            2 *
+            Math.PI *
+            index
+          ) /
+          count;
+
+        return {
+          x:
+            Math.cos(angle) *
+            radius,
+
+          y:
+            Math.sin(angle) *
+            radius
+        };
+      }
+    );
+  }
+
+
+  function assignCurrentMarkerOffsets(
+    items
+  ) {
+    if (
+      !Array.isArray(items) ||
+      items.length === 0 ||
+      typeof map === "undefined"
+    ) {
+      return;
+    }
+
+    const groups =
+      new Map();
+
+    items.forEach(function(item) {
+      const latlng =
+        item.latlng ||
+        currentObservationLatLng(
+          item.observation
+        );
+
+      if (!latlng) {
+        item.currentScreenOffset = {
+          x: 0,
+          y: 0
+        };
+
+        return;
+      }
+
+      /*
+       * Group ONLY threats resolved to the same
+       * geographic point.
+       *
+       * Zoom level must never create a group.
+       */
+      const key =
+        Number(latlng.lat).toFixed(6) +
+        "|" +
+        Number(latlng.lng).toFixed(6);
+
+      if (!groups.has(key)) {
+        groups.set(
+          key,
+          []
+        );
+      }
+
+      groups
+        .get(key)
+        .push(item);
+    });
+
+
+    groups.forEach(function(group) {
+      if (group.length === 1) {
+        group[0].currentScreenOffset = {
+          x: 0,
+          y: 0
+        };
+
+        return;
+      }
+
+
+      /*
+       * Stable ordering prevents the icons
+       * from changing places after refresh.
+       */
+      group.sort(function(a, b) {
+        const typeA =
+          resolveThreatVisualType(
+            a.track ||
+            a.__airThreatTrack
+          );
+
+        const typeB =
+          resolveThreatVisualType(
+            b.track ||
+            b.__airThreatTrack
+          );
+
+        if (typeA !== typeB) {
+          return typeA.localeCompare(
+            typeB
+          );
+        }
+
+        const trackA =
+          (
+            a.track ||
+            a.__airThreatTrack ||
+            {}
+          ).track_id || "";
+
+        const trackB =
+          (
+            b.track ||
+            b.__airThreatTrack ||
+            {}
+          ).track_id || "";
+
+        return String(trackA)
+          .localeCompare(
+            String(trackB)
+          );
+      });
+
+
+      const largestBox =
+        group.reduce(
+          function(maxValue, item) {
+            const source =
+              item.observation
+                ? (
+                    item.observation.event ||
+                    {}
+                  )
+                : {};
+
+            const reportedCount =
+              item.__airThreatCount ||
+              source.reported_object_count ||
+              1;
+
+            return Math.max(
+              maxValue,
+              threatIconBoxSize(
+                true,
+                reportedCount
+              )
+            );
+          },
+          0
+        );
+
+
+      /*
+       * Compact separation between different
+       * threats at the same point.
+       */
+      const spacing =
+        Math.max(
+          28,
+          largestBox + 8
+        );
+
+
+      const offsets =
+        currentMarkerLayoutOffsets(
+          group.length,
+          spacing
+        );
+
+
+      group.forEach(
+        function(item, index) {
+          item.currentScreenOffset =
+            offsets[index] || {
+              x: 0,
+              y: 0
+            };
+        }
+      );
+    });
+  }
+
+
+  function buildCurrentMarkerOffsets(
+    preparedRows
+  ) {
+    assignCurrentMarkerOffsets(
+      preparedRows
+    );
+  }
+
+
+  function reflowCurrentMarkerLayer() {
+    if (
+      !airMarkerLayer ||
+      typeof map === "undefined"
+    ) {
+      return;
+    }
+
+    const items = [];
+
+    airMarkerLayer.eachLayer(
+      function(marker) {
+        if (
+          !marker ||
+          typeof marker.getLatLng !==
+            "function" ||
+          !marker.__airThreatTrack
+        ) {
+          return;
+        }
+
+        items.push({
+          marker: marker,
+          latlng:
+            marker.getLatLng(),
+
+          track:
+            marker.__airThreatTrack,
+
+          __airThreatTrack:
+            marker.__airThreatTrack,
+
+          __airThreatCount:
+            marker.__airThreatCount ||
+            1,
+
+          currentScreenOffset: {
+            x: 0,
+            y: 0
+          }
+        });
+      }
+    );
+
+    assignCurrentMarkerOffsets(
+      items
+    );
+
+    items.forEach(function(item) {
+      const marker =
+        item.marker;
+
+      marker.__airThreatOffset = {
+        x:
+          Number(
+            item.currentScreenOffset.x
+          ) || 0,
+
+        y:
+          Number(
+            item.currentScreenOffset.y
+          ) || 0
+      };
+    });
+  }
+
+
   function renderAirPayload(payload) {
     ensureAirLayers();
     clearAirLayers();
     addAirLayerToMap();
 
-    const trackRows = getTracks(payload);
-    const activeRows = trackRows.filter(function (row) {
-      return isTrackActive(row.track);
-    });
 
-    const seenEdges = new Set();
-    const seenHistory = new Set();
-    let markerCount = 0;
-    let historicalCount = 0;
-    let edgeCount = 0;
+    const trackRows =
+      getTracks(
+        payload
+      );
 
-    activeRows.forEach(function (row) {
-      const thread = row.thread;
-      const track = row.track;
-      const observation = getLatestResolvedObservation(track);
 
-      const currentKey = observation
-        ? endpointKey({
-            message_id: observation.event.message_id,
-            telegram_date: observation.event.telegram_date,
-            place: observation.place
-          })
-        : "";
+    const backendActiveRows =
+      trackRows.filter(
+        function(row) {
+          return isTrackActive(
+            row.track
+          );
+        }
+      );
 
-      /*
-       * REPORTED POSITIONS
-       *
-       * Every place explicitly present in an event may be shown
-       * as a historical reported position if geometry is resolved.
-       *
-       * IMPORTANT:
-       * Showing a marker does NOT imply movement between markers.
-       * Lines remain controlled exclusively by drawable_edges.
-       */
-      (track.segments || []).forEach(function (segment) {
 
-        (segment.events || []).forEach(function (event) {
+    /*
+     * Operational LIVE state:
+     *
+     * backend active
+     * AND
+     * meaningful source observation <= 30 minutes old.
+     */
+    const activeRows =
+      backendActiveRows.filter(
+        function(row) {
+          return isTrackFreshActive(
+            row.track
+          );
+        }
+      );
 
-          (event.places || []).forEach(function (place) {
+
+    const staleActiveRows =
+      backendActiveRows.filter(
+        function(row) {
+          return !isTrackFreshActive(
+            row.track
+          );
+        }
+      );
+
+
+    const terminalRows =
+      trackRows.filter(
+        function(row) {
+
+          const terminal =
+            row.track &&
+            row.track.current_terminal;
+
+
+          return Boolean(
+            terminal &&
+            terminal.drawable === true &&
+            !terminal.superseded_by_message_id &&
+            terminalLiveOpacity(
+              terminal
+            ) > 0
+          );
+        }
+      );
+
+
+    if (selectedAirTrackId) {
+
+      const selectedStillExists =
+        trackRows.some(
+          function(row) {
+
+            return (
+              airTrackKey(
+                row.track
+              ) ===
+              selectedAirTrackId
+            );
+
+          }
+        );
+
+
+      if (!selectedStillExists) {
+        selectedAirTrackId =
+          null;
+      }
+    }
+
+
+    /*
+     * Which tracks get detailed history and curves?
+     */
+    let detailRows = [];
+
+
+    if (
+      airTrackDisplayMode ===
+      "all"
+    ) {
+
+      const detailKeys =
+        new Set();
+
+
+      activeRows
+        .concat(
+          terminalRows
+        )
+        .forEach(
+          function(row) {
+
+            const key =
+              airTrackKey(
+                row.track
+              );
+
 
             if (
-              addReportedEventPlace(
-                thread,
-                track,
-                event,
-                place,
-                seenHistory,
-                currentKey
+              !key ||
+              detailKeys.has(
+                key
               )
             ) {
-              historicalCount += 1;
+              return;
             }
 
-          });
 
-        });
+            detailKeys.add(
+              key
+            );
 
-      });
+            detailRows.push(
+              row
+            );
 
-      /*
-       * VISUAL TRACK STITCHING
-       *
-       * Draw smooth neon curves through all sequential
-       * reported positions of the same track.
-       *
-       * This includes:
-       * - multiple places mentioned in one message
-       * - next reply updates in the same track
-       */
-      drawTrackSequenceCurves(
-        thread,
-        track,
-        seenEdges
-      );
+          }
+        );
+    }
 
-      if (!observation) return;
 
-      const marker = L.marker(observation.latlng, {
-        icon: createThreatIcon(
-          track,
-          true
-        ),
-        keyboard: true,
-        riseOnHover: true,
-        zIndexOffset: 500
-      });
+    else if (
+      airTrackDisplayMode ===
+        "selected" &&
+      selectedAirTrackId
+    ) {
 
-      marker.__airThreatTrack = track;
+      detailRows =
+        trackRows.filter(
+          function(row) {
 
-      marker.bindPopup(
-        buildPopupHtml(
+            return (
+              airTrackKey(
+                row.track
+              ) ===
+              selectedAirTrackId
+            );
+
+          }
+        );
+    }
+
+
+    /*
+     * One logical track may have several source-reported
+     * current places in its newest report.
+     *
+     * Flatten them into individual map markers while keeping
+     * the same thread/track identity.
+     */
+    const preparedRows = [];
+
+
+    activeRows.forEach(
+      function(row) {
+
+        const observations =
+          getLatestResolvedObservations(
+            row.track
+          );
+
+
+        observations.forEach(
+          function(
+            observation,
+            observationIndex
+          ) {
+
+            preparedRows.push({
+              thread:
+                row.thread,
+
+              track:
+                row.track,
+
+              observation:
+                observation,
+
+              observationIndex:
+                observationIndex,
+
+              observationCount:
+                observations.length,
+
+              currentScreenOffset: {
+                x: 0,
+                y: 0
+              }
+            });
+
+          }
+        );
+
+      }
+    );
+
+
+    buildCurrentMarkerOffsets(
+      preparedRows
+    );
+
+
+    const seenEdges =
+      new Set();
+
+    const seenHistory =
+      new Set();
+
+
+    let markerCount = 0;
+
+    let mappedTrackCount = 0;
+
+    let terminalMarkerCount = 0;
+
+    let historicalCount = 0;
+
+    let edgeCount = 0;
+
+
+    /*
+     * Number of fresh logical threats that have at least one
+     * resolved current source-reported place.
+     */
+    activeRows.forEach(
+      function(row) {
+
+        if (
+          getLatestResolvedObservations(
+            row.track
+          ).length > 0
+        ) {
+          mappedTrackCount += 1;
+        }
+
+      }
+    );
+
+
+    /*
+     * Detailed history / source-reported curves.
+     */
+    detailRows.forEach(
+      function(row) {
+
+        const thread =
+          row.thread;
+
+        const track =
+          row.track;
+
+
+        const currentObservations =
+          isTrackFreshActive(
+            track
+          )
+            ? getLatestResolvedObservations(
+                track
+              )
+            : [];
+
+
+        const currentKeys =
+          new Set();
+
+
+        currentObservations.forEach(
+          function(observation) {
+
+            currentKeys.add(
+              endpointKey({
+                message_id:
+                  observation.event.message_id,
+
+                telegram_date:
+                  observation.event.telegram_date,
+
+                place:
+                  observation.place
+              })
+            );
+
+          }
+        );
+
+
+        (
+          track.segments || []
+        ).forEach(
+          function(segment) {
+
+            (
+              segment.events || []
+            ).forEach(
+              function(event) {
+
+                (
+                  event.places || []
+                ).forEach(
+                  function(place) {
+
+                    if (
+                      addReportedEventPlace(
+                        thread,
+                        track,
+                        event,
+                        place,
+                        seenHistory,
+                        currentKeys
+                      )
+                    ) {
+                      historicalCount += 1;
+                    }
+
+                  }
+                );
+
+              }
+            );
+
+          }
+        );
+
+
+        drawTrackSequenceCurves(
           thread,
           track,
-          observation.event || {},
-          observation.place || {},
-          "current"
-        ),
-        { maxWidth: 360 }
-      );
+          seenEdges
+        );
 
-      installMarkerClickReticle(marker);
-      marker.addTo(airMarkerLayer);
-      markerCount += 1;
-    });
+      }
+    );
+
+
+    /*
+     * Terminal status markers remain independent
+     * from SEL / ALL / OFF.
+     */
+    terminalRows.forEach(
+      function(row) {
+
+        if (
+          addTerminalMarker(
+            row.thread,
+            row.track
+          )
+        ) {
+          terminalMarkerCount += 1;
+        }
+
+      }
+    );
+
+
+    /*
+     * Fresh current source-reported positions.
+     */
+    preparedRows.forEach(
+      function(row) {
+
+        const thread =
+          row.thread;
+
+        const track =
+          row.track;
+
+        const observation =
+          row.observation;
+
+        const currentScreenOffset =
+          row.currentScreenOffset ||
+          {
+            x: 0,
+            y: 0
+          };
+
+
+        if (!observation) {
+          return;
+        }
+
+
+        const event =
+          observation.event ||
+          {};
+
+
+        const marker =
+          L.marker(
+            observation.latlng,
+            {
+              icon:
+                createThreatIcon(
+                  track,
+                  true,
+                  event.reported_object_count ||
+                    1,
+                  currentScreenOffset
+                ),
+
+              keyboard:
+                true,
+
+              riseOnHover:
+                true,
+
+              zIndexOffset:
+                500,
+
+              bubblingMouseEvents:
+                false
+            }
+          );
+
+
+        marker.__airThreatTrack =
+          track;
+
+
+        marker.__airThreatCount =
+          event.reported_object_count ||
+          1;
+
+
+        marker.__airThreatOffset = {
+          x:
+            Number(
+              currentScreenOffset.x
+            ) || 0,
+
+          y:
+            Number(
+              currentScreenOffset.y
+            ) || 0
+        };
+
+
+        marker.bindPopup(
+          buildPopupHtml(
+            thread,
+            track,
+            event,
+            observation.place ||
+              {},
+            "current"
+          ),
+          {
+            maxWidth:
+              360
+          }
+        );
+
+
+        marker.on(
+          "click",
+          function() {
+
+            const trackId =
+              airTrackKey(
+                track
+              );
+
+
+            if (
+              airTrackDisplayMode !==
+                "selected" ||
+              selectedAirTrackId !==
+                trackId
+            ) {
+              selectAirTrack(
+                track
+              );
+            }
+
+          }
+        );
+
+
+        installMarkerClickReticle(
+          marker
+        );
+
+
+        marker.addTo(
+          airMarkerLayer
+        );
+
+
+        if (
+          reopenSelectedPopup &&
+          selectedAirTrackId ===
+            airTrackKey(track)
+        ) {
+
+          /*
+           * For a multi-place current report we reopen only
+           * the marker that triggered the rerender first.
+           */
+          window.setTimeout(
+            function() {
+
+              if (
+                mode === "air" &&
+                map &&
+                map.hasLayer(
+                  marker
+                )
+              ) {
+                marker.openPopup();
+              }
+
+            },
+            0
+          );
+
+
+          reopenSelectedPopup =
+            false;
+        }
+
+
+        markerCount += 1;
+
+      }
+    );
+
 
     return {
-      loadedTracks: trackRows.length,
-      activeTracks: activeRows.length,
-      markers: markerCount,
-      historicalMarkers: historicalCount,
-      edges: edgeCount
+      loadedTracks:
+        trackRows.length,
+
+      backendActiveTracks:
+        backendActiveRows.length,
+
+      activeTracks:
+        activeRows.length,
+
+      staleActiveTracks:
+        staleActiveRows.length,
+
+      mappedTracks:
+        mappedTrackCount,
+
+      markers:
+        markerCount,
+
+      terminalMarkers:
+        terminalMarkerCount,
+
+      historicalMarkers:
+        historicalCount,
+
+      edges:
+        edgeCount
     };
   }
+
 
   function renderAirHud(stats) {
     setText("#top-bar .brand", "AIR THREAT // TRACK SYS");
     setHudStat("hud-total", stats.loadedTracks, "tracks loaded");
     setHudStat("hud-shown", stats.activeTracks, "active tracks");
-    setHudStat("hud-participants", stats.markers, "mapped positions");
+    setHudStat(
+      "hud-participants",
+      stats.markers,
+      "mapped positions"
+    );
 
     const live = $("hud-live");
     if (live) {
-      live.textContent = "● AIR FEED";
+      live.textContent =
+        airDataMode === "demo"
+          ? "● DEMO FEED"
+          : "● AIR FEED";
       live.style.color = "var(--amber)";
       live.title =
-        stats.edges + " rendered track curves; " +
-        stats.historicalMarkers + " reported historical positions";
+        stats.historicalMarkers +
+        " reported historical positions; " +
+
+        stats.terminalMarkers +
+        " recent terminal markers; " +
+
+        stats.staleActiveTracks +
+        " backend-active tracks hidden by 30 min LIVE TTL; " +
+
+        "TRK mode: " +
+        airTrackDisplayMode.toUpperCase();
     }
   }
 
   function buildAirUrl() {
-    const params = new URLSearchParams({
-      lookback_hours: String(AIR_LOOKBACK_HOURS),
-      limit_threads: String(AIR_LIMIT_THREADS),
-      map_ready_only: "true"
-    });
 
-    return AIR_API_URL + "?" + params.toString();
+    /*
+     * DEMO mode deliberately bypasses the Oracle API.
+     *
+     * Timestamp prevents the browser from serving
+     * an old cached demo JSON.
+     */
+    if (
+      airDataMode === "demo"
+    ) {
+      return (
+        AIR_DEMO_URL +
+        "?t=" +
+        Date.now()
+      );
+    }
+
+
+    const params =
+      new URLSearchParams({
+        lookback_hours:
+          String(
+            AIR_LOOKBACK_HOURS
+          ),
+
+        limit_threads:
+          String(
+            AIR_LIMIT_THREADS
+          ),
+
+        map_ready_only:
+          "true"
+      });
+
+
+    return (
+      AIR_API_URL +
+      "?" +
+      params.toString()
+    );
   }
+
+
+
+  function collectDemoDates(
+    payload
+  ) {
+    const dates = [];
+
+
+    const addDate =
+      function(value) {
+
+        if (!value) {
+          return;
+        }
+
+        const ms =
+          new Date(
+            value
+          ).getTime();
+
+        if (
+          Number.isFinite(ms)
+        ) {
+          dates.push(ms);
+        }
+      };
+
+
+    (
+      payload &&
+      payload.threads ||
+      []
+    ).forEach(
+      function(thread) {
+
+        (
+          thread.tracks || []
+        ).forEach(
+          function(track) {
+
+            (
+              track.segments || []
+            ).forEach(
+              function(segment) {
+
+                (
+                  segment.events || []
+                ).forEach(
+                  function(event) {
+
+                    addDate(
+                      event.telegram_date
+                    );
+
+                  }
+                );
+
+              }
+            );
+
+
+            const terminal =
+              track.current_terminal;
+
+            if (terminal) {
+              addDate(
+                terminal.telegram_date
+              );
+            }
+
+          }
+        );
+
+      }
+    );
+
+
+    return dates;
+  }
+
+
+  function shiftDemoDate(
+    value,
+    deltaMs
+  ) {
+    if (!value) {
+      return value;
+    }
+
+    const oldMs =
+      new Date(
+        value
+      ).getTime();
+
+    if (
+      !Number.isFinite(
+        oldMs
+      )
+    ) {
+      return value;
+    }
+
+    return new Date(
+      oldMs +
+      deltaMs
+    ).toISOString();
+  }
+
+
+  function normalizeDemoPayloadTime(
+    payload
+  ) {
+
+    if (
+      airDataMode !== "demo" ||
+      !payload
+    ) {
+      return payload;
+    }
+
+
+    const dates =
+      collectDemoDates(
+        payload
+      );
+
+
+    if (
+      dates.length === 0
+    ) {
+      return payload;
+    }
+
+
+    /*
+     * Make the newest DEMO event look like it arrived
+     * approximately two minutes ago.
+     *
+     * Every other timestamp is shifted by exactly the
+     * same amount, preserving the original chronology.
+     */
+    const newestDemoMs =
+      Math.max(
+        ...dates
+      );
+
+
+    const targetNewestMs =
+      Date.now() -
+      (2 * 60 * 1000);
+
+
+    const deltaMs =
+      targetNewestMs -
+      newestDemoMs;
+
+
+    (
+      payload.threads || []
+    ).forEach(
+      function(thread) {
+
+        (
+          thread.tracks || []
+        ).forEach(
+          function(track) {
+
+            (
+              track.segments || []
+            ).forEach(
+              function(segment) {
+
+                (
+                  segment.events || []
+                ).forEach(
+                  function(event) {
+
+                    event.telegram_date =
+                      shiftDemoDate(
+                        event.telegram_date,
+                        deltaMs
+                      );
+
+                  }
+                );
+
+              }
+            );
+
+
+            const terminal =
+              track.current_terminal;
+
+            if (terminal) {
+
+              terminal.telegram_date =
+                shiftDemoDate(
+                  terminal.telegram_date,
+                  deltaMs
+                );
+
+            }
+
+          }
+        );
+
+      }
+    );
+
+
+    return payload;
+  }
+
 
   async function loadAirTracks() {
     if (mode !== "air") return;
@@ -1583,7 +5726,10 @@
 
     const live = $("hud-live");
     if (live) {
-      live.textContent = "● AIR SYNCING";
+      live.textContent =
+        airDataMode === "demo"
+          ? "● DEMO LOADING"
+          : "● AIR SYNCING";
       live.style.color = "var(--amber)";
     }
 
@@ -1603,6 +5749,10 @@
 
       const payload = await response.json();
 
+      normalizeDemoPayloadTime(
+        payload
+      );
+
       if (mode !== "air") return;
 
       lastPayload = payload;
@@ -1615,7 +5765,10 @@
 
       const errorLive = $("hud-live");
       if (errorLive) {
-        errorLive.textContent = "● AIR FEED ERROR";
+        errorLive.textContent =
+          airDataMode === "demo"
+            ? "● DEMO FILE ERROR"
+            : "● AIR FEED ERROR";
         errorLive.style.color = "var(--red)";
       }
 
@@ -1655,7 +5808,45 @@
     mode = "air";
     lastPayload = null;
 
+    installAirTrackModeButton();
+    installAirDataModeButton();
+
+    const dataModeButton =
+      $("toggle-air-data-mode");
+
+    if (dataModeButton) {
+      dataModeButton.style.display =
+        "";
+
+      updateAirDataModeButton();
+    }
+
+
+    const trackModeButton =
+      $("toggle-air-tracks");
+
+    if (trackModeButton) {
+      trackModeButton.style.display =
+        "";
+
+      updateAirTrackModeButton();
+    }
+
     addAirLayerToMap();
+    showAirLegend();
+
+    ensureAirVisualSettingsPanel();
+    setAirVisualPanelVisible(false);
+
+    applyAirVisualSettings(false);
+
+    const settingsButton =
+      $("toggle-heat-settings");
+
+    if (settingsButton) {
+      settingsButton.title =
+        "Налаштування AIR-візуалізації";
+    }
 
     const button = $("toggle-air-mode");
     if (button) {
@@ -1683,6 +5874,29 @@
     mode = "mine";
     stopRefreshLoop();
 
+    selectedAirTrackId =
+      null;
+
+    reopenSelectedPopup =
+      false;
+
+    const trackModeButton =
+      $("toggle-air-tracks");
+
+    if (trackModeButton) {
+      trackModeButton.style.display =
+        "none";
+    }
+
+
+    const dataModeButton =
+      $("toggle-air-data-mode");
+
+    if (dataModeButton) {
+      dataModeButton.style.display =
+        "none";
+    }
+
     if (activeRequest) {
       activeRequest.abort();
       activeRequest = null;
@@ -1690,6 +5904,17 @@
 
     clearAirLayers();
     removeAirLayerFromMap();
+    hideAirLegend();
+
+    setAirVisualPanelVisible(false);
+
+    const settingsButton =
+      $("toggle-heat-settings");
+
+    if (settingsButton) {
+      settingsButton.title =
+        "Налаштування heatmap";
+    }
 
     const button = $("toggle-air-mode");
     if (button) {
@@ -1726,6 +5951,219 @@
     }, 0);
   }
 
+  function installAirTrackModeButton() {
+    const iconControl =
+      document.querySelector(
+        ".icon-control"
+      );
+
+    if (
+      !iconControl ||
+      $("toggle-air-tracks")
+    ) {
+      return;
+    }
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.id =
+      "toggle-air-tracks";
+
+    button.type =
+      "button";
+
+    button.textContent =
+      "SEL";
+
+    button.title =
+      "Треки: SEL — клікни по цілі";
+
+    button.style.display =
+      mode === "air"
+        ? ""
+        : "none";
+
+    button.addEventListener(
+      "click",
+      function(event) {
+        event.preventDefault();
+        event.stopPropagation();
+
+        if (mode !== "air") {
+          return;
+        }
+
+        cycleAirTrackDisplayMode();
+      }
+    );
+
+    iconControl.appendChild(
+      button
+    );
+
+    updateAirTrackModeButton();
+  }
+
+
+  function updateAirDataModeButton() {
+
+    const button =
+      $("toggle-air-data-mode");
+
+    if (!button) {
+      return;
+    }
+
+
+    if (
+      airDataMode === "demo"
+    ) {
+      button.textContent =
+        "DEMO";
+
+      button.title =
+        "Демо-дані активні. Натисни, щоб перейти на LIVE.";
+
+      button.style.color =
+        "#ffd84d";
+
+      button.style.background =
+        "rgba(255,216,77,.12)";
+
+      button.style.borderColor =
+        "rgba(255,216,77,.65)";
+    }
+
+    else {
+      button.textContent =
+        "LIVE";
+
+      button.title =
+        "Живі дані з сервера. Натисни, щоб перейти на DEMO.";
+
+      button.style.color =
+        "#57f287";
+
+      button.style.background =
+        "rgba(87,242,135,.09)";
+
+      button.style.borderColor =
+        "rgba(87,242,135,.55)";
+    }
+  }
+
+
+  function setAirDataMode(
+    nextMode
+  ) {
+
+    airDataMode =
+      nextMode === "demo"
+        ? "demo"
+        : "live";
+
+
+    try {
+      localStorage.setItem(
+        AIR_DATA_MODE_STORAGE_KEY,
+        airDataMode
+      );
+    } catch (error) {
+      // localStorage can be unavailable.
+    }
+
+
+    lastPayload =
+      null;
+
+
+    if (
+      activeRequest
+    ) {
+      activeRequest.abort();
+      activeRequest = null;
+    }
+
+
+    updateAirDataModeButton();
+
+
+    if (
+      mode === "air"
+    ) {
+      loadAirTracks();
+    }
+  }
+
+
+  function toggleAirDataMode() {
+
+    setAirDataMode(
+      airDataMode === "live"
+        ? "demo"
+        : "live"
+    );
+  }
+
+
+  function installAirDataModeButton() {
+
+    const iconControl =
+      document.querySelector(
+        ".icon-control"
+      );
+
+
+    if (
+      !iconControl ||
+      $("toggle-air-data-mode")
+    ) {
+      return;
+    }
+
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+
+    button.id =
+      "toggle-air-data-mode";
+
+    button.type =
+      "button";
+
+    button.style.display =
+      mode === "air"
+        ? ""
+        : "none";
+
+
+    button.addEventListener(
+      "click",
+      function(event) {
+
+        event.preventDefault();
+        event.stopPropagation();
+
+        toggleAirDataMode();
+      }
+    );
+
+
+    iconControl.appendChild(
+      button
+    );
+
+
+    updateAirDataModeButton();
+  }
+
+
   function installButton() {
     const iconControl = document.querySelector(".icon-control");
 
@@ -1748,8 +6186,27 @@
 
   function init() {
     installThreatIconStyles();
+    installAirLegendStyles();
+    buildAirLegend();
+
     ensureAirLayers();
     installButton();
+    installAirTrackModeButton();
+    installAirDataModeButton();
+
+    ensureAirVisualSettingsPanel();
+    installAirSettingsButtonHook();
+    applyAirVisualSettings(false);
+
+    window.setTimeout(
+      installAirSettingsButtonHook,
+      250
+    );
+
+    window.setTimeout(
+      installAirSettingsButtonHook,
+      1000
+    );
 
     if (typeof map !== "undefined") {
       map.on(
@@ -1759,7 +6216,27 @@
     }
 
     if (typeof map !== "undefined") {
-      map.on("overlayadd", suppressMineOverlayInAir);
+      map.on(
+        "overlayadd",
+        suppressMineOverlayInAir
+      );
+
+      /*
+       * In SEL mode a click on empty map clears the selected
+       * track and returns to a clean operational view.
+       */
+      map.on(
+        "click",
+        function() {
+          if (
+            mode === "air" &&
+            airTrackDisplayMode ===
+              "selected"
+          ) {
+            clearSelectedAirTrack();
+          }
+        }
+      );
     }
 
     if (!$("toggle-air-mode")) {
