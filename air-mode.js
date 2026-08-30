@@ -5484,34 +5484,89 @@ coreLine.addTo(
         }
 
 
-        if (
-          isMonitorTrack &&
-          (
-            parentInfo.places.length !== 1 ||
-            childInfo.places.length !== 1
-          )
-        ) {
+        /*
+         * MONITOR1654 SINGLE-OBJECT REPLY BRANCH
+         *
+         * A source report may contain several geographic
+         * alternatives:
+         *
+         *   ?????/?????
+         *        ? reply
+         *   ????????/??????????
+         *
+         * We must NOT arbitrarily select one place as the
+         * exact physical route.
+         *
+         * Instead every resolved parent alternative is linked
+         * to every resolved child alternative. The resulting
+         * fan represents the explicit Telegram reply relation,
+         * not a predicted or exact physical trajectory.
+         *
+         * Multi-object Monitor reports are excluded earlier
+         * in this function.
+         */
+        if (isMonitorTrack) {
+
+          parentInfo.places.forEach(
+            function(from) {
+
+              childInfo.places.forEach(
+                function(to) {
+
+                  const lineKey = [
+                    "monitor-reply-alternative",
+
+                    track.track_id ||
+                      thread.root_message_id ||
+                      "unknown-track",
+
+                    segment.segment_id ||
+                      "unknown-segment",
+
+                    parentInfo.event.message_id,
+
+                    from.place.id ||
+                      from.place.place_id ||
+                      from.place.canonical_name ||
+                      from.place.raw_name ||
+                      "parent-place",
+
+                    childInfo.event.message_id,
+
+                    to.place.id ||
+                      to.place.place_id ||
+                      to.place.canonical_name ||
+                      to.place.raw_name ||
+                      "reply-place"
+                  ].join("|");
+
+
+                  drawSmoothTrackCurve(
+                    from.latlng,
+                    to.latlng,
+                    lineKey,
+                    seenEdges
+                  );
+
+                }
+              );
+
+            }
+          );
+
+
           return;
         }
 
 
         /*
-         * Continue from the LAST resolved place
-         * in the parent report...
+         * Legacy/non-Monitor behavior.
          */
         const from =
           parentInfo.places[
             parentInfo.places.length - 1
           ];
 
-
-        /*
-         * ...to the FIRST resolved place
-         * in the reply report.
-         *
-         * Any additional places inside the reply
-         * were already connected above by Rule A.
-         */
         const to =
           childInfo.places[0];
 
