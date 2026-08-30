@@ -52,6 +52,42 @@ function isRequestedAirDebugTrack(track) {
 }
 
 
+
+  const AIR_DEBUG_API_BASE =
+    "https://89-168-114-2.sslip.io/api/monitor/debug-track";
+
+
+  function buildAirDebugTrackUrl() {
+    if (!AIR_DEBUG_TRACK_ID) {
+      return null;
+    }
+
+    const match =
+      AIR_DEBUG_TRACK_ID.match(
+        /^(\d+):(\d+)$/
+      );
+
+    if (!match) {
+      console.warn(
+        "[AIR DEBUG] invalid track id:",
+        AIR_DEBUG_TRACK_ID
+      );
+
+      return null;
+    }
+
+    return (
+      AIR_DEBUG_API_BASE +
+      "/" +
+      encodeURIComponent(match[1]) +
+      "/" +
+      encodeURIComponent(match[2]) +
+      "?t=" +
+      Date.now()
+    );
+  }
+
+
   const AIR_DEMO_URL =
     "./demo-air.json";
 
@@ -6190,16 +6226,20 @@ coreLine.addTo(
   if (AIR_DEBUG_TRACK_ID) {
 
     const debugTrack = trackRows.find(
-      function(track) {
-        return isRequestedAirDebugTrack(track);
+      function(row) {
+        return isRequestedAirDebugTrack(
+          row && row.track
+        );
       }
     );
 
     if (debugTrack) {
 
       const alreadyIncluded = detailRows.some(
-        function(track) {
-          return isRequestedAirDebugTrack(track);
+        function(row) {
+          return isRequestedAirDebugTrack(
+            row && row.track
+          );
         }
       );
 
@@ -7050,6 +7090,161 @@ coreLine.addTo(
         applyMonitorTerminalAnchorOverrides(
           payload
         );
+
+
+        /*
+         * Optional historical debug branch.
+         *
+         * This is fetched independently of the normal
+         * /api/monitor/tracks limit and TTL.
+         *
+         * The backend debug endpoint returns is_active=false,
+         * therefore this branch can only appear as historical
+         * detail and can never become a LIVE/current threat.
+         */
+        const debugUrl =
+          buildAirDebugTrackUrl();
+
+        if (debugUrl) {
+
+          try {
+
+            const debugResponse =
+              await fetch(
+                debugUrl,
+                {
+                  method: "GET",
+                  cache: "no-store",
+                  headers: {
+                    "Accept":
+                      "application/json"
+                  },
+                  signal:
+                    activeRequest.signal
+                }
+              );
+
+
+            if (!debugResponse.ok) {
+              throw new Error(
+                "AIR DEBUG API HTTP " +
+                debugResponse.status
+              );
+            }
+
+
+            let debugPayload =
+              await debugResponse.json();
+
+
+            debugPayload =
+              normalizeMonitorPayload(
+                debugPayload
+              );
+
+
+            resolveMonitorLinearReferences(
+              debugPayload
+            );
+
+
+            applyMonitorTerminalAnchorOverrides(
+              debugPayload
+            );
+
+
+            const debugThreads =
+              Array.isArray(
+                debugPayload &&
+                debugPayload.threads
+              )
+                ? debugPayload.threads
+                : [];
+
+
+            if (debugThreads.length > 0) {
+
+              const existingThreads =
+                Array.isArray(
+                  payload.threads
+                )
+                  ? payload.threads
+                  : [];
+
+
+              const debugKeys =
+                new Set(
+                  debugThreads.map(
+                    function(thread) {
+                      return String(
+                        thread.branch_id ||
+                        ""
+                      );
+                    }
+                  )
+                );
+
+
+              payload.threads =
+                existingThreads.filter(
+                  function(thread) {
+                    return !debugKeys.has(
+                      String(
+                        thread.branch_id ||
+                        ""
+                      )
+                    );
+                  }
+                ).concat(
+                  debugThreads
+                );
+
+
+              payload.thread_count =
+                payload.threads.length;
+
+
+              payload.track_count =
+                payload.threads.reduce(
+                  function(total, thread) {
+                    return (
+                      total +
+                      (
+                        Array.isArray(
+                          thread.tracks
+                        )
+                          ? thread.tracks.length
+                          : 0
+                      )
+                    );
+                  },
+                  0
+                );
+
+
+              console.info(
+                "[AIR DEBUG] historical branch loaded:",
+                AIR_DEBUG_TRACK_ID
+              );
+            }
+
+          } catch (debugError) {
+
+            if (
+              debugError &&
+              debugError.name ===
+                "AbortError"
+            ) {
+              throw debugError;
+            }
+
+
+            console.error(
+              "[AIR DEBUG] historical branch load failed:",
+              debugError
+            );
+          }
+        }
       }
 
       normalizeDemoPayloadTime(
