@@ -88,6 +88,19 @@ function isRequestedAirDebugTrack(track) {
   }
 
 
+  const AIR_DISCLAIMER_TITLE =
+    "AIR DATA // IMPORTANT NOTICE";
+
+
+  const AIR_DISCLAIMER_LINES = [
+    "Карта не відображає підтверджені реальні поточні координати повітряних загроз.",
+    "Маркери та лінії є візуальним представленням інформації з відкритих повідомлень. Частина точок може бути приблизно розрахована між указаними географічними орієнтирами.",
+    "Інформація може надходити та відображатися з невеликою затримкою, бути неповною або неточною.",
+    "Карта має виключно інформаційний характер і не призначена для планування місій, маршрутів пересування, визначення безпечних зон або прийняття рішень, від яких залежить безпека людей.",
+    "Під час повітряної тривоги керуйтеся офіційними повідомленнями та правилами цивільного захисту."
+  ];
+
+
   const AIR_DEMO_URL =
     "./demo-air.json";
 
@@ -4368,6 +4381,249 @@ function updateThreatMarkerScale() {
   }
 
 
+
+  /*
+   * MONITOR1654 VISUAL EVENT ANCHOR
+   *
+   * Single-object report:
+   *   1 resolved place  -> original point
+   *   2 resolved places -> derived midpoint
+   *   3+ resolved places -> derived centroid
+   *
+   * Multi-object reports remain unchanged.
+   */
+  function monitorResolvedVisualPlaces(places) {
+    return (
+      Array.isArray(places)
+        ? places.filter(function(place) {
+            if (
+              !place ||
+              place.geometry_resolved !== true
+            ) {
+              return false;
+            }
+
+            const lat = Number(place.lat);
+            const lng = Number(place.lng);
+
+            return (
+              Number.isFinite(lat) &&
+              Number.isFinite(lng)
+            );
+          })
+        : []
+    );
+  }
+
+
+  function buildMonitorDerivedAnchor(
+    event,
+    resolvedPlaces
+  ) {
+    if (
+      !Array.isArray(resolvedPlaces) ||
+      resolvedPlaces.length < 2
+    ) {
+      return null;
+    }
+
+    let latSum = 0;
+    let lngSum = 0;
+
+    resolvedPlaces.forEach(function(place) {
+      latSum += Number(place.lat);
+      lngSum += Number(place.lng);
+    });
+
+    const lat =
+      latSum / resolvedPlaces.length;
+
+    const lng =
+      lngSum / resolvedPlaces.length;
+
+    const sourceNames =
+      resolvedPlaces
+        .map(function(place) {
+          return (
+            place.canonical_name ||
+            place.raw_name ||
+            place.id ||
+            ""
+          );
+        })
+        .filter(Boolean);
+
+    const roles =
+      resolvedPlaces
+        .map(function(place) {
+          return place.location_role || "";
+        })
+        .filter(Boolean);
+
+    let locationRole =
+      roles[0] || "reported_position";
+
+    if (
+      roles.length > 0 &&
+      roles.every(function(role) {
+        return (
+          role === "direction_target" ||
+          role === "inherited_direction"
+        );
+      })
+    ) {
+      locationRole = "direction_target";
+    }
+
+    const kind =
+      resolvedPlaces.length === 2
+        ? "midpoint"
+        : "centroid";
+
+    const messageId =
+      event && event.message_id
+        ? event.message_id
+        : "event";
+
+    return {
+      id:
+        "derived:" +
+        messageId,
+
+      place_id:
+        "derived:" +
+        messageId,
+
+      canonical_name:
+        sourceNames.join(" / "),
+
+      raw_name:
+        sourceNames.join(" / "),
+
+      location_role:
+        locationRole,
+
+      geometry_resolved:
+        true,
+
+      lat:
+        lat,
+
+      lng:
+        lng,
+
+      geometry: {
+        type: "Point",
+        coordinates: [
+          lng,
+          lat
+        ]
+      },
+
+      type:
+        kind === "midpoint"
+          ? "derived_midpoint"
+          : "derived_centroid",
+
+      place_type:
+        kind === "midpoint"
+          ? "derived_midpoint"
+          : "derived_centroid",
+
+      __monitor1654:
+        true,
+
+      __monitor_anchor_kind:
+        kind,
+
+      __monitor_source_places:
+        resolvedPlaces.map(function(place) {
+          return {
+            id:
+              place.id ||
+              place.place_id ||
+              null,
+
+            raw_name:
+              place.raw_name ||
+              null,
+
+            canonical_name:
+              place.canonical_name ||
+              null,
+
+            lat:
+              Number(place.lat),
+
+            lng:
+              Number(place.lng),
+
+            location_role:
+              place.location_role ||
+              null
+          };
+        })
+    };
+  }
+
+
+  function deriveMonitorVisualPlaces(
+    event,
+    sourcePlaces
+  ) {
+    const places =
+      Array.isArray(sourcePlaces)
+        ? sourcePlaces
+        : [];
+
+    const objectCount =
+      Math.max(
+        1,
+        Number(
+          (
+            event &&
+            (
+              event.object_count ||
+              event.reported_object_count
+            )
+          ) ||
+          1
+        ) || 1
+      );
+
+    /*
+     * Do not collapse aggregate/group reports.
+     */
+    if (objectCount > 1) {
+      return places;
+    }
+
+    const resolved =
+      monitorResolvedVisualPlaces(
+        places
+      );
+
+    /*
+     * Zero/one resolved point stays unchanged.
+     * This also preserves unresolved linear references
+     * so the existing KML ring-road resolver can handle them.
+     */
+    if (resolved.length < 2) {
+      return places;
+    }
+
+    const anchor =
+      buildMonitorDerivedAnchor(
+        event,
+        resolved
+      );
+
+    return anchor
+      ? [anchor]
+      : places;
+  }
+
+
   function monitorPointToAirPlace(point, locationRole) {
     if (!point || typeof point !== "object") {
       return null;
@@ -4486,12 +4742,19 @@ function updateThreatMarkerScale() {
             ).map(
               function(sourceEvent) {
 
-                const places =
+                const rawPlaces =
                   (
                     Array.isArray(sourceEvent.places)
                       ? sourceEvent.places
                       : []
                   ).map(monitorPlaceToAirPlace);
+
+
+                const places =
+                  deriveMonitorVisualPlaces(
+                    sourceEvent,
+                    rawPlaces
+                  );
 
                 const explicitThreats =
                   sourceEvent.explicit_threat
@@ -4505,6 +4768,7 @@ function updateThreatMarkerScale() {
                 return {
                   ...sourceEvent,
                   __monitor1654: true,
+                  raw_places: rawPlaces,
                   places: places,
                   original_text:
                     sourceEvent.text || "",
@@ -4826,6 +5090,20 @@ function updateThreatMarkerScale() {
         place && place.segment_object_count
       );
 
+    const monitorAnchorKind =
+      place &&
+      place.__monitor_anchor_kind;
+
+
+    const monitorSourcePlaces =
+      Array.isArray(
+        place &&
+        place.__monitor_source_places
+      )
+        ? place.__monitor_source_places
+        : [];
+
+
     const semanticLabel =
       isDirectionTarget
         ? "SOURCE-REPORTED DIRECTION TARGET"
@@ -4871,6 +5149,39 @@ function updateThreatMarkerScale() {
         escapeHtml(sourceGroupCount) +
         "<br>";
     }
+
+    if (
+      monitorAnchorKind === "midpoint" ||
+      monitorAnchorKind === "centroid"
+    ) {
+      const anchorNames =
+        monitorSourcePlaces
+          .map(function(sourcePlace) {
+            return (
+              sourcePlace.canonical_name ||
+              sourcePlace.raw_name ||
+              "—"
+            );
+          })
+          .join(" / ");
+
+      html +=
+        '<span style="color:var(--amber)">' +
+        'DERIVED SOURCE REFERENCE' +
+        '</span><br>' +
+
+        "Орієнтири джерела: " +
+        escapeHtml(anchorNames) +
+        "<br>" +
+
+        (
+          monitorAnchorKind === "midpoint"
+            ? "Візуальна точка розміщена посередині між двома вказаними географічними орієнтирами."
+            : "Візуальна точка розміщена в центроїді вказаних географічних орієнтирів."
+        ) +
+        "<br><br>";
+    }
+
 
     html +=
       "Час повідомлення: " +
@@ -6758,6 +7069,577 @@ coreLine.addTo(
   }
 
 
+
+  function installAirDisclaimerStyles() {
+    if (
+      document.getElementById(
+        "air-disclaimer-styles"
+      )
+    ) {
+      return;
+    }
+
+    const style =
+      document.createElement("style");
+
+    style.id =
+      "air-disclaimer-styles";
+
+    style.textContent = `
+      .air-disclaimer-overlay {
+        position: fixed;
+        inset: 0;
+        z-index: 100000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(
+            circle at center,
+            rgba(0, 24, 32, 0.40),
+            rgba(0, 3, 7, 0.90)
+          );
+        backdrop-filter: blur(5px);
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+        transition:
+          opacity 150ms linear,
+          visibility 150ms linear;
+      }
+
+      .air-disclaimer-overlay.is-visible {
+        opacity: 1;
+        visibility: visible;
+        pointer-events: auto;
+      }
+
+      .air-disclaimer-panel {
+        position: relative;
+        width: min(760px, 94vw);
+        max-height: 86vh;
+        overflow: auto;
+        padding: 28px 30px 24px;
+        box-sizing: border-box;
+        background:
+          linear-gradient(
+            180deg,
+            rgba(1, 21, 29, 0.985),
+            rgba(0, 10, 16, 0.985)
+          );
+        border:
+          1px solid
+          rgba(0, 220, 255, 0.52);
+        box-shadow:
+          0 0 0 1px
+            rgba(0, 180, 220, 0.10)
+            inset,
+          0 0 22px
+            rgba(0, 210, 255, 0.18),
+          0 0 100px
+            rgba(0, 130, 180, 0.12);
+        color: #d3faff;
+      }
+
+      .air-disclaimer-panel::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        background:
+          repeating-linear-gradient(
+            180deg,
+            rgba(0, 235, 255, 0.026) 0,
+            rgba(0, 235, 255, 0.026) 1px,
+            transparent 2px,
+            transparent 4px
+          );
+      }
+
+      .air-disclaimer-panel::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        top: 0;
+        height: 2px;
+        pointer-events: none;
+        background:
+          linear-gradient(
+            90deg,
+            transparent,
+            rgba(0, 235, 255, 0.88),
+            transparent
+          );
+        box-shadow:
+          0 0 12px
+          rgba(0, 235, 255, 0.48);
+        animation:
+          airDisclaimerScan
+          2.6s
+          linear
+          infinite;
+      }
+
+      .air-disclaimer-kicker {
+        position: relative;
+        z-index: 2;
+        color:
+          var(--amber, #ffd15c);
+        font-size: 10px;
+        letter-spacing: 0.24em;
+        margin-bottom: 9px;
+      }
+
+      .air-disclaimer-title {
+        position: relative;
+        z-index: 2;
+        margin: 0 0 20px;
+        color:
+          var(--cyan, #43e9ff);
+        font-size:
+          clamp(19px, 3vw, 27px);
+        line-height: 1.1;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-shadow:
+          0 0 13px
+          rgba(67, 233, 255, 0.38);
+      }
+
+      .air-disclaimer-body {
+        position: relative;
+        z-index: 2;
+        font-size: 14px;
+        line-height: 1.62;
+        color: #c9eef3;
+      }
+
+      .air-disclaimer-body p {
+        margin: 0 0 13px;
+      }
+
+      .air-disclaimer-actions {
+        position: relative;
+        z-index: 2;
+        display: flex;
+        justify-content: flex-end;
+        margin-top: 21px;
+        padding-top: 17px;
+        border-top:
+          1px solid
+          rgba(0, 215, 245, 0.17);
+      }
+
+      .air-disclaimer-ok {
+        min-width: 116px;
+        padding: 10px 20px;
+        border:
+          1px solid
+          rgba(255, 195, 62, 0.68);
+        background:
+          linear-gradient(
+            180deg,
+            rgba(22, 25, 12, 0.95),
+            rgba(10, 15, 8, 0.95)
+          );
+        color:
+          var(--amber, #ffd15c);
+        font: inherit;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.17em;
+        cursor: pointer;
+        box-shadow:
+          0 0 12px
+          rgba(255, 195, 62, 0.16);
+        transition:
+          transform 100ms linear,
+          border-color 100ms linear,
+          box-shadow 100ms linear;
+      }
+
+      .air-disclaimer-ok:hover,
+      .air-disclaimer-ok:focus-visible {
+        outline: none;
+        transform:
+          translateY(-1px);
+        border-color:
+          #ffe097;
+        box-shadow:
+          0 0 18px
+          rgba(255, 195, 62, 0.30);
+      }
+
+      .air-disclaimer-glitch-in {
+        animation:
+          airDisclaimerGlitchIn
+          260ms
+          steps(2, end);
+      }
+
+      .air-disclaimer-glitch-out {
+        animation:
+          airDisclaimerGlitchOut
+          210ms
+          steps(2, end)
+          forwards;
+      }
+
+      @keyframes airDisclaimerGlitchIn {
+        0% {
+          opacity: 0;
+          transform:
+            translateX(-12px)
+            skewX(-1.5deg)
+            scale(0.985);
+          filter: blur(4px);
+        }
+        20% {
+          opacity: 0.85;
+          transform:
+            translateX(9px)
+            skewX(1deg);
+        }
+        42% {
+          transform:
+            translateX(-5px);
+        }
+        67% {
+          transform:
+            translateX(4px);
+        }
+        82% {
+          transform:
+            translateX(-2px);
+        }
+        100% {
+          opacity: 1;
+          transform: none;
+          filter: none;
+        }
+      }
+
+      @keyframes airDisclaimerGlitchOut {
+        0% {
+          opacity: 1;
+          transform: none;
+        }
+        28% {
+          transform:
+            translateX(6px)
+            skewX(-1deg);
+        }
+        53% {
+          transform:
+            translateX(-9px)
+            skewX(1deg);
+        }
+        74% {
+          opacity: 0.48;
+          transform:
+            translateX(5px)
+            scaleY(0.985);
+        }
+        100% {
+          opacity: 0;
+          transform:
+            translateY(6px)
+            scale(0.985);
+          filter: blur(3px);
+        }
+      }
+
+      @keyframes airDisclaimerScan {
+        0% {
+          top: 0%;
+          opacity: 0;
+        }
+        10% {
+          opacity: 0.8;
+        }
+        90% {
+          opacity: 0.35;
+        }
+        100% {
+          top: 100%;
+          opacity: 0;
+        }
+      }
+
+      @media (
+        prefers-reduced-motion:
+        reduce
+      ) {
+        .air-disclaimer-panel,
+        .air-disclaimer-panel::after {
+          animation: none !important;
+        }
+      }
+    `;
+
+    document.head.appendChild(
+      style
+    );
+  }
+
+
+  function ensureAirDisclaimerModal() {
+    let overlay =
+      document.getElementById(
+        "air-disclaimer-overlay"
+      );
+
+    if (overlay) {
+      return overlay;
+    }
+
+    overlay =
+      document.createElement(
+        "div"
+      );
+
+    overlay.id =
+      "air-disclaimer-overlay";
+
+    overlay.className =
+      "air-disclaimer-overlay";
+
+    overlay.setAttribute(
+      "role",
+      "dialog"
+    );
+
+    overlay.setAttribute(
+      "aria-modal",
+      "true"
+    );
+
+    overlay.setAttribute(
+      "aria-labelledby",
+      "air-disclaimer-title"
+    );
+
+    const panel =
+      document.createElement(
+        "div"
+      );
+
+    panel.className =
+      "air-disclaimer-panel";
+
+    const kicker =
+      document.createElement(
+        "div"
+      );
+
+    kicker.className =
+      "air-disclaimer-kicker";
+
+    kicker.textContent =
+      "AIR THREAT // INFORMATION SYSTEM";
+
+    const title =
+      document.createElement(
+        "h2"
+      );
+
+    title.id =
+      "air-disclaimer-title";
+
+    title.className =
+      "air-disclaimer-title";
+
+    title.textContent =
+      AIR_DISCLAIMER_TITLE;
+
+    const body =
+      document.createElement(
+        "div"
+      );
+
+    body.className =
+      "air-disclaimer-body";
+
+    AIR_DISCLAIMER_LINES.forEach(
+      function(line) {
+        const paragraph =
+          document.createElement(
+            "p"
+          );
+
+        paragraph.textContent =
+          line;
+
+        body.appendChild(
+          paragraph
+        );
+      }
+    );
+
+    const actions =
+      document.createElement(
+        "div"
+      );
+
+    actions.className =
+      "air-disclaimer-actions";
+
+    const button =
+      document.createElement(
+        "button"
+      );
+
+    button.type =
+      "button";
+
+    button.className =
+      "air-disclaimer-ok";
+
+    button.textContent =
+      "OK";
+
+    button.addEventListener(
+      "click",
+      hideAirDisclaimer
+    );
+
+    actions.appendChild(
+      button
+    );
+
+    panel.appendChild(
+      kicker
+    );
+
+    panel.appendChild(
+      title
+    );
+
+    panel.appendChild(
+      body
+    );
+
+    panel.appendChild(
+      actions
+    );
+
+    overlay.appendChild(
+      panel
+    );
+
+    document.body.appendChild(
+      overlay
+    );
+
+    return overlay;
+  }
+
+
+  function showAirDisclaimer() {
+    installAirDisclaimerStyles();
+
+    const overlay =
+      ensureAirDisclaimerModal();
+
+    const panel =
+      overlay.querySelector(
+        ".air-disclaimer-panel"
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    panel.classList.remove(
+      "air-disclaimer-glitch-out"
+    );
+
+    panel.classList.remove(
+      "air-disclaimer-glitch-in"
+    );
+
+    void panel.offsetWidth;
+
+    overlay.classList.add(
+      "is-visible"
+    );
+
+    panel.classList.add(
+      "air-disclaimer-glitch-in"
+    );
+
+    window.setTimeout(
+      function() {
+        panel.classList.remove(
+          "air-disclaimer-glitch-in"
+        );
+      },
+      280
+    );
+
+    const button =
+      panel.querySelector(
+        ".air-disclaimer-ok"
+      );
+
+    if (button) {
+      window.setTimeout(
+        function() {
+          button.focus();
+        },
+        50
+      );
+    }
+  }
+
+
+  function hideAirDisclaimer() {
+    const overlay =
+      document.getElementById(
+        "air-disclaimer-overlay"
+      );
+
+    if (!overlay) {
+      return;
+    }
+
+    const panel =
+      overlay.querySelector(
+        ".air-disclaimer-panel"
+      );
+
+    if (!panel) {
+      return;
+    }
+
+    panel.classList.remove(
+      "air-disclaimer-glitch-in"
+    );
+
+    void panel.offsetWidth;
+
+    panel.classList.add(
+      "air-disclaimer-glitch-out"
+    );
+
+    window.setTimeout(
+      function() {
+        overlay.classList.remove(
+          "is-visible"
+        );
+
+        panel.classList.remove(
+          "air-disclaimer-glitch-out"
+        );
+      },
+      230
+    );
+  }
+
+
   function renderAirHud(stats) {
     setText("#top-bar .brand", "AIR THREAT // TRACK SYS");
     setHudStat("hud-total", stats.loadedTracks, "tracks loaded");
@@ -7332,6 +8214,7 @@ coreLine.addTo(
   }
 
   async function enterAirMode() {
+    showAirDisclaimer();
     if (mode === "air") return;
 
     rememberMineState();
