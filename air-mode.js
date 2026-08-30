@@ -9,6 +9,9 @@
   const AIR_DEMO_URL =
     "./demo-air.json";
 
+  const AIR_RING_ROAD_URL =
+    "./kharkiv-ring-road.geojson";
+
   const AIR_DATA_MODE_STORAGE_KEY =
     "mine-risk-map-air-data-mode-v1";
 
@@ -49,6 +52,10 @@
   let airVisualSettingsControl = null;
   let airVisualRaf = null;
 
+  let airRingRoadGeometry = null;
+  let airRingRoadLayer = null;
+  let airRingRoadLoadPromise = null;
+
   /*
    * Track visualization modes:
    *
@@ -57,7 +64,7 @@
    * off      = no history/curves
    */
   let airTrackDisplayMode =
-    "selected";
+    "all";
 
   let selectedAirTrackId =
     null;
@@ -73,7 +80,8 @@
     glowRadius: 8,
     pulse: 65,
     trackGlow: 22,
-    trackWidth: 2.0
+    trackWidth: 2.0,
+    ringRoadIntensity: 55
   };
 
   let airVisualSettings =
@@ -181,6 +189,14 @@
             AIR_VISUAL_DEFAULTS.trackWidth,
           0.5,
           5
+        ),
+
+      ringRoadIntensity:
+        clampAirSetting(
+          stored.ringRoadIntensity ??
+            AIR_VISUAL_DEFAULTS.ringRoadIntensity,
+          0,
+          100
         )
     };
   }
@@ -329,6 +345,556 @@ root.style.setProperty(
   }
 
 
+
+  function getRingRoadLineCoordinates() {
+    if (!airRingRoadGeometry) return [];
+
+    const geometry =
+      airRingRoadGeometry.type === "Feature"
+        ? airRingRoadGeometry.geometry
+        : airRingRoadGeometry;
+
+    if (!geometry) return [];
+
+    if (
+      geometry.type === "Polygon" &&
+      Array.isArray(geometry.coordinates) &&
+      Array.isArray(geometry.coordinates[0])
+    ) {
+      return geometry.coordinates[0];
+    }
+
+    if (
+      geometry.type === "LineString" &&
+      Array.isArray(geometry.coordinates)
+    ) {
+      return geometry.coordinates;
+    }
+
+    return [];
+  }
+
+  function updateAirRingRoadStyle() {
+    if (!airRingRoadLayer) return;
+
+    const scale =
+      Math.max(
+        0,
+        Math.min(
+          1,
+          Number(
+            airVisualSettings &&
+            airVisualSettings.ringRoadIntensity
+          ) / 100
+        )
+      );
+
+    airRingRoadLayer.eachLayer(function(layerGroup) {
+      if (
+        layerGroup &&
+        typeof layerGroup.eachLayer === "function"
+      ) {
+        layerGroup.eachLayer(function(layer) {
+          if (
+            !layer ||
+            typeof layer.setStyle !== "function"
+          ) return;
+
+          const role = layer.__airRingRoadRole;
+
+          if (role === "glow") {
+            layer.setStyle({
+              color: "#35e6ff",
+              weight: 10,
+              opacity: 0.13 * scale,
+              fillOpacity: 0
+            });
+          } else if (role === "core") {
+            layer.setStyle({
+              color: "#35e6ff",
+              weight: 1.6,
+              opacity: 0.78 * scale,
+              fillColor: "#35e6ff",
+              fillOpacity: 0.025 * scale
+            });
+          }
+        });
+      }
+    });
+
+    if (
+      scale <= 0 &&
+      typeof map !== "undefined" &&
+      map.hasLayer(airRingRoadLayer)
+    ) {
+      map.removeLayer(airRingRoadLayer);
+    } else if (
+      scale > 0 &&
+      mode === "air" &&
+      typeof map !== "undefined" &&
+      !map.hasLayer(airRingRoadLayer)
+    ) {
+      airRingRoadLayer.addTo(map);
+    }
+  }
+
+  async function ensureAirRingRoadLoaded() {
+    if (airRingRoadGeometry && airRingRoadLayer) {
+      updateAirRingRoadStyle();
+      return true;
+    }
+
+    if (airRingRoadLoadPromise) {
+      return airRingRoadLoadPromise;
+    }
+
+    airRingRoadLoadPromise =
+      (async function() {
+        try {
+          const response =
+            await fetch(
+              AIR_RING_ROAD_URL +
+              "?t=" +
+              Date.now(),
+              { cache: "no-store" }
+            );
+
+          if (!response.ok) {
+            throw new Error(
+              "Ring road GeoJSON HTTP " +
+              response.status
+            );
+          }
+
+          const payload =
+            await response.json();
+
+          const feature =
+            payload &&
+            Array.isArray(payload.features)
+              ? payload.features[0]
+              : payload;
+
+          if (!feature) {
+            throw new Error(
+              "Ring road GeoJSON has no feature"
+            );
+          }
+
+          airRingRoadGeometry = feature;
+
+          const glow =
+            L.geoJSON(
+              feature,
+              {
+                interactive: false,
+                style: {
+                  color: "#35e6ff",
+                  weight: 10,
+                  opacity: 0.07,
+                  fillOpacity: 0
+                }
+              }
+            );
+
+          glow.eachLayer(function(layer) {
+            layer.__airRingRoadRole = "glow";
+          });
+
+          const core =
+            L.geoJSON(
+              feature,
+              {
+                interactive: false,
+                style: {
+                  color: "#35e6ff",
+                  weight: 1.6,
+                  opacity: 0.43,
+                  fillColor: "#35e6ff",
+                  fillOpacity: 0.014
+                }
+              }
+            );
+
+          core.eachLayer(function(layer) {
+            layer.__airRingRoadRole = "core";
+          });
+
+          airRingRoadLayer =
+            L.layerGroup([
+              glow,
+              core
+            ]);
+
+          updateAirRingRoadStyle();
+          return true;
+        } catch (error) {
+          console.warn(
+            "AIR ring-road geometry unavailable:",
+            error
+          );
+
+          airRingRoadGeometry = null;
+          airRingRoadLayer = null;
+          return false;
+        } finally {
+          airRingRoadLoadPromise = null;
+        }
+      })();
+
+    return airRingRoadLoadPromise;
+  }
+
+  function nearestPointOnRingRoad(latlng) {
+    const coords =
+      getRingRoadLineCoordinates();
+
+    if (
+      !latlng ||
+      coords.length < 2
+    ) return null;
+
+    const lat0 = Number(latlng[0]);
+    const lon0 = Number(latlng[1]);
+
+    if (
+      !Number.isFinite(lat0) ||
+      !Number.isFinite(lon0)
+    ) return null;
+
+    const cosLat =
+      Math.cos(
+        lat0 *
+        Math.PI /
+        180
+      );
+
+    let best = null;
+
+    for (
+      let i = 0;
+      i < coords.length - 1;
+      i += 1
+    ) {
+      const a = coords[i];
+      const b = coords[i + 1];
+
+      if (
+        !Array.isArray(a) ||
+        !Array.isArray(b)
+      ) continue;
+
+      const ax =
+        (Number(a[0]) - lon0) *
+        cosLat;
+
+      const ay =
+        Number(a[1]) - lat0;
+
+      const bx =
+        (Number(b[0]) - lon0) *
+        cosLat;
+
+      const by =
+        Number(b[1]) - lat0;
+
+      const dx = bx - ax;
+      const dy = by - ay;
+
+      const denom =
+        dx * dx +
+        dy * dy;
+
+      let t =
+        denom > 0
+          ? -(
+              ax * dx +
+              ay * dy
+            ) / denom
+          : 0;
+
+      t =
+        Math.max(
+          0,
+          Math.min(
+            1,
+            t
+          )
+        );
+
+      const x =
+        ax +
+        t * dx;
+
+      const y =
+        ay +
+        t * dy;
+
+      const d2 =
+        x * x +
+        y * y;
+
+      if (
+        !best ||
+        d2 < best.d2
+      ) {
+        const lon =
+          Number(a[0]) +
+          t * (
+            Number(b[0]) -
+            Number(a[0])
+          );
+
+        const lat =
+          Number(a[1]) +
+          t * (
+            Number(b[1]) -
+            Number(a[1])
+          );
+
+        best = {
+          lat: lat,
+          lng: lon,
+          d2: d2,
+          segmentIndex: i,
+          segmentFraction: t
+        };
+      }
+    }
+
+    return best;
+  }
+
+  function isRingRoadReference(place) {
+    if (!place) return false;
+
+    const text =
+      [
+        place.raw_name,
+        place.canonical_name,
+        place.name
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+    return (
+      text.includes("кільцев") ||
+      text.includes("кольцев")
+    );
+  }
+
+  function isTrackableSourcePlace(place) {
+    if (!place) return false;
+
+    const role =
+      place.location_role;
+
+    return (
+      role === "reported_position" ||
+      role === "reported_area" ||
+      role === "direction_target" ||
+      role === "inherited_direction" ||
+      role === "linear_reference_projection"
+    );
+  }
+
+  function resolvedSourcePlaces(event) {
+    return (
+      Array.isArray(
+        event &&
+        event.places
+      )
+        ? event.places
+        : []
+    )
+      .filter(isTrackableSourcePlace)
+      .map(function(place) {
+        return {
+          place: place,
+          latlng:
+            geometryToLatLng(
+              place
+            )
+        };
+      })
+      .filter(function(item) {
+        return Boolean(
+          item.latlng
+        );
+      });
+  }
+
+  function resolveMonitorLinearReferences(payload) {
+    if (
+      !payload ||
+      !airRingRoadGeometry
+    ) {
+      return payload;
+    }
+
+    (payload.threads || [])
+      .forEach(function(thread) {
+        (thread.tracks || [])
+          .forEach(function(track) {
+            if (
+              !track ||
+              track.__monitor1654 !== true
+            ) {
+              return;
+            }
+
+            (track.segments || [])
+              .forEach(function(segment) {
+                const events =
+                  Array.isArray(segment.events)
+                    ? segment.events
+                    : [];
+
+                let previousLatLng = null;
+
+                events.forEach(function(event) {
+                  if (!event) return;
+
+                  const places =
+                    Array.isArray(event.places)
+                      ? event.places
+                      : [];
+
+                  places.forEach(function(place) {
+                    if (
+                      !place ||
+                      !isTrackableSourcePlace(
+                        place
+                      )
+                    ) return;
+
+                    let latlng =
+                      geometryToLatLng(
+                        place
+                      );
+
+                    if (
+                      !latlng &&
+                      previousLatLng &&
+                      isRingRoadReference(
+                        place
+                      )
+                    ) {
+                      const snap =
+                        nearestPointOnRingRoad(
+                          previousLatLng
+                        );
+
+                      if (snap) {
+                        place.resolved = true;
+                        place.geometry_resolved = true;
+                        place.lat = snap.lat;
+                        place.lng = snap.lng;
+                        place.geometry = {
+                          type: "Point",
+                          coordinates: [
+                            snap.lng,
+                            snap.lat
+                          ]
+                        };
+
+                        place.canonical_name =
+                          "Кільцева дорога (наближена прив'язка)";
+
+                        place.place_type =
+                          "linear_feature";
+
+                        place.linear_reference_projection =
+                          true;
+
+                        place.linear_reference_id =
+                          "kharkiv_ring_road";
+
+                        place.linear_reference_segment =
+                          snap.segmentIndex;
+
+                        place.linear_reference_fraction =
+                          snap.segmentFraction;
+
+                        latlng = [
+                          snap.lat,
+                          snap.lng
+                        ];
+                      }
+                    }
+
+                    if (latlng) {
+                      previousLatLng =
+                        latlng;
+                    }
+                  });
+                });
+              });
+          });
+      });
+
+    return payload;
+  }
+
+  function applyMonitorTerminalAnchorOverrides(payload) {
+    if (!payload) return payload;
+
+    (payload.threads || [])
+      .forEach(function(thread) {
+        (thread.tracks || [])
+          .forEach(function(track) {
+            if (
+              !track ||
+              track.__monitor1654 !== true ||
+              !track.current_terminal
+            ) {
+              return;
+            }
+
+            const terminal =
+              track.current_terminal;
+
+            const status =
+              String(
+                terminal.status ||
+                ""
+              ).toLowerCase();
+
+            if (
+              status !== "lost_tracking"
+            ) {
+              return;
+            }
+
+            let latestPlace = null;
+
+            (track.segments || [])
+              .forEach(function(segment) {
+                (segment.events || [])
+                  .forEach(function(event) {
+                    resolvedSourcePlaces(event)
+                      .forEach(function(item) {
+                        latestPlace =
+                          item.place;
+                      });
+                  });
+              });
+
+            if (latestPlace) {
+              terminal.last_place =
+                latestPlace;
+
+              terminal.__anchored_to_latest_source_reference =
+                true;
+            }
+          });
+      });
+
+    return payload;
+  }
+
+
 function rerenderAirVisuals() {
     if (
       mode !== "air" ||
@@ -372,6 +938,7 @@ function rerenderAirVisuals() {
     rerender = false
   ) {
     applyAirVisualCssVariables();
+    updateAirRingRoadStyle();
 
     saveAirVisualSettings();
 
@@ -396,7 +963,10 @@ function rerenderAirVisuals() {
         airVisualSettings.trackGlow,
 
       "air-track-width-slider":
-        airVisualSettings.trackWidth
+        airVisualSettings.trackWidth,
+
+      "air-ring-road-intensity-slider":
+        airVisualSettings.ringRoadIntensity
     };
 
     Object.entries(values)
@@ -433,7 +1003,12 @@ function rerenderAirVisuals() {
       "air-track-width-value":
         Number(
           airVisualSettings.trackWidth
-        ).toFixed(1)
+        ).toFixed(1),
+
+      "air-ring-road-intensity-value":
+        Math.round(
+          airVisualSettings.ringRoadIntensity
+        )
     };
 
     Object.entries(displays)
@@ -598,6 +1173,19 @@ function rerenderAirVisuals() {
           >
 
 
+          <label class="small-label">
+            Kharkiv boundary
+            <span id="air-ring-road-intensity-value"></span>
+          </label>
+
+          <input
+            type="range"
+            id="air-ring-road-intensity-slider"
+            min="0"
+            max="100"
+            step="1"
+          >
+
           <button id="reset-air-visual-settings">
             Скинути
           </button>
@@ -689,6 +1277,16 @@ function rerenderAirVisuals() {
       function(value) {
         return Number(value)
           .toFixed(1);
+      }
+    );
+
+    bindAirVisualSlider(
+      "air-ring-road-intensity-slider",
+      "air-ring-road-intensity-value",
+      "ringRoadIntensity",
+      function(value) {
+        updateAirRingRoadStyle();
+        return Math.round(value);
       }
     );
 
@@ -4015,8 +4613,9 @@ function updateThreatMarkerScale() {
               function(place) {
                 return (
                   place &&
-                  place.location_role ===
-                    "reported_position"
+                  isTrackableSourcePlace(
+                    place
+                  )
                 );
               }
             );
@@ -4583,6 +5182,14 @@ coreLine.addTo(
 
         const resolvedPlaces =
           (event.places || [])
+            .filter(function(place) {
+              return (
+                !isMonitorTrack ||
+                isTrackableSourcePlace(
+                  place
+                )
+              );
+            })
             .map(function(place) {
 
               return {
@@ -6136,6 +6743,14 @@ coreLine.addTo(
           normalizeMonitorPayload(
             payload
           );
+
+        resolveMonitorLinearReferences(
+          payload
+        );
+
+        applyMonitorTerminalAnchorOverrides(
+          payload
+        );
       }
 
       normalizeDemoPayloadTime(
@@ -6224,6 +6839,8 @@ coreLine.addTo(
     addAirLayerToMap();
     showAirLegend();
 
+    await ensureAirRingRoadLoaded();
+
     ensureAirVisualSettingsPanel();
     setAirVisualPanelVisible(false);
 
@@ -6293,6 +6910,19 @@ coreLine.addTo(
 
     clearAirLayers();
     removeAirLayerFromMap();
+
+    if (
+      airRingRoadLayer &&
+      typeof map !== "undefined" &&
+      map.hasLayer(
+        airRingRoadLayer
+      )
+    ) {
+      map.removeLayer(
+        airRingRoadLayer
+      );
+    }
+
     hideAirLegend();
 
     setAirVisualPanelVisible(false);
