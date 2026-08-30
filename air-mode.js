@@ -3876,7 +3876,13 @@ function updateThreatMarkerScale() {
   }
 
   function isTrackActive(track) {
-    return track && track.active === true;
+    return Boolean(
+      track &&
+      (
+        track.active === true ||
+        track.is_active === true
+      )
+    );
   }
 
 
