@@ -4695,43 +4695,108 @@ function updateThreatMarkerScale() {
       event.source_text ||
       "";
   }
-
   function buildPopupHtml(thread, track, event, place, kind) {
-    const rootId = thread && thread.root_message_id;
-    const trackId = track && track.track_id;
-    const report = sourceText(event);
-    const isCurrent = kind === "current";
+    const rootId =
+      thread && thread.root_message_id;
 
-    const isDirectionTarget =
-      Boolean(
-        place &&
-        place.location_role ===
-          "direction_target"
+    const trackId =
+      track && (track.track_id || track.branch_id);
+
+    const report =
+      sourceText(event);
+
+    const isCurrent =
+      kind === "current";
+
+    const locationRole =
+      String(
+        place && place.location_role || ""
       );
 
-    const positionLabel =
-      isCurrent
-        ? "CURRENT REPORTED POSITION"
+    const isDirectionTarget =
+      locationRole === "direction_target" ||
+      locationRole === "inherited_direction" ||
+      locationRole === "linear_reference_projection";
+
+    const sourceGroupCount =
+      Number(
+        place && place.segment_object_count
+      );
+
+    const semanticLabel =
+      isDirectionTarget
+        ? "SOURCE-REPORTED DIRECTION TARGET"
         : (
-            isDirectionTarget
-              ? "SOURCE-REPORTED DIRECTION TARGET"
+            isCurrent
+              ? "CURRENT REPORTED POSITION"
               : "REPORTED POSITION"
           );
 
+    const semanticColor =
+      isDirectionTarget
+        ? "var(--amber)"
+        : (
+            isCurrent
+              ? "var(--cyan)"
+              : "var(--text-dim)"
+          );
+
     let html =
-      "<b>" + escapeHtml(threatLabel(track)) + "</b><br>" +
-      '<span style="color:' + (isCurrent ? 'var(--cyan)' : 'var(--text-dim)') + '">' +
-      positionLabel +
+      "<b>" +
+      escapeHtml(threatLabel(track)) +
+      "</b><br>" +
+      '<span style="color:' +
+      semanticColor +
+      '">' +
+      semanticLabel +
       "</span><br>" +
-      "Місце: " + escapeHtml(place.canonical_name || place.id || "—") + "<br>" +
-      "Час повідомлення: " + formatDate(event.telegram_date) + "<br>" +
-      "Статус треку: " + escapeHtml(
-        track.active === true ? "ACTIVE" : "INACTIVE"
+      "Місце: " +
+      escapeHtml(
+        place.canonical_name ||
+        place.raw_name ||
+        place.id ||
+        "—"
+      ) +
+      "<br>";
+
+    if (
+      Number.isFinite(sourceGroupCount) &&
+      sourceGroupCount > 0
+    ) {
+      html +=
+        "Об'єктів у цій групі: " +
+        escapeHtml(sourceGroupCount) +
+        "<br>";
+    }
+
+    html +=
+      "Час повідомлення: " +
+      formatDate(event.telegram_date) +
+      "<br>" +
+      "Статус треку: " +
+      escapeHtml(
+        track.active === true
+          ? "ACTIVE"
+          : "INACTIVE"
       );
 
-    if (trackId) html += "<br>Track: " + escapeHtml(trackId);
-    if (rootId) html += "<br>Thread: " + escapeHtml(rootId);
-    if (event.message_id) html += "<br>Message: " + escapeHtml(event.message_id);
+    if (trackId) {
+      html +=
+        "<br>Track: " +
+        escapeHtml(trackId);
+    }
+
+    if (rootId) {
+      html +=
+        "<br>Thread: " +
+        escapeHtml(rootId);
+    }
+
+    if (event.message_id) {
+      html +=
+        "<br>Message: " +
+        escapeHtml(event.message_id);
+    }
 
     if (report) {
       html +=
@@ -4739,12 +4804,27 @@ function updateThreatMarkerScale() {
         escapeHtml(report).replace(/\n/g, "<br>");
     }
 
-    html += isCurrent
-      ? '<br><br><span style="color:var(--text-dim)">Великий пульсуючий маркер — остання однозначно геоприв’язана reported position цього активного треку.</span>'
-      : '<br><br><span style="color:var(--text-dim)">Мала точка — історична reported position. Вона не є прогнозом поточного місцеположення.</span>';
+    if (isDirectionTarget) {
+      html +=
+        '<br><br><span style="color:var(--text-dim)">' +
+        'Це напрямок або географічний орієнтир, прямо вказаний джерелом. ' +
+        'Маркер не означає підтверджену поточну координату об\'єкта.' +
+        '</span>';
+    } else if (isCurrent) {
+      html +=
+        '<br><br><span style="color:var(--text-dim)">' +
+        'Великий пульсуючий маркер — остання однозначно геоприв\'язана reported position цього активного треку.' +
+        '</span>';
+    } else {
+      html +=
+        '<br><br><span style="color:var(--text-dim)">' +
+        'Мала точка — історична reported position. Вона не є прогнозом поточного місцеположення.' +
+        '</span>';
+    }
 
     return html;
   }
+
 
   function installMarkerClickReticle(marker) {
     marker.on("click", function (e) {
@@ -4835,7 +4915,6 @@ function updateThreatMarkerScale() {
     marker.addTo(airHistoryLayer);
     return true;
   }
-
   function addReportedEventPlace(
     thread,
     track,
@@ -4845,6 +4924,14 @@ function updateThreatMarkerScale() {
     currentKey
   ) {
     if (!event || !place) {
+      return false;
+    }
+
+    if (
+      event.__monitor1654 === true &&
+      typeof isTrackableSourcePlace === "function" &&
+      !isTrackableSourcePlace(place)
+    ) {
       return false;
     }
 
@@ -4882,26 +4969,47 @@ function updateThreatMarkerScale() {
 
     seenHistory.add(key);
 
-    const marker = L.marker(
-      latlng,
-      {
-        icon: createThreatIcon(
-      track,
-      false,
-      event.reported_object_count || 1
-    ),
+    const sourceGroupCount =
+      Math.max(
+        1,
+        Number(
+          place.segment_object_count ||
+          event.reported_object_count ||
+          event.object_count ||
+          1
+        ) || 1
+      );
 
-        keyboard: true,
-        riseOnHover: true,
-        zIndexOffset: -100
-      }
-    );
+    const marker =
+      L.marker(
+        latlng,
+        {
+          icon:
+            createThreatIcon(
+              track,
+              false,
+              sourceGroupCount
+            ),
+
+          keyboard:
+            true,
+
+          riseOnHover:
+            true,
+
+          zIndexOffset:
+            -100,
+
+          bubblingMouseEvents:
+            false
+        }
+      );
 
     marker.__airThreatTrack =
       track;
 
-marker.__airThreatCount =
-  event.reported_object_count || 1;
+    marker.__airThreatCount =
+      sourceGroupCount;
 
     marker.bindPopup(
       buildPopupHtml(
@@ -4912,7 +5020,29 @@ marker.__airThreatCount =
         "history"
       ),
       {
-        maxWidth: 340
+        maxWidth:
+          360
+      }
+    );
+
+    marker.on(
+      "click",
+      function() {
+        const trackId =
+          typeof airTrackKey === "function"
+            ? airTrackKey(track)
+            : null;
+
+        if (
+          trackId &&
+          typeof selectAirTrack === "function" &&
+          (
+            airTrackDisplayMode !== "selected" ||
+            selectedAirTrackId !== trackId
+          )
+        ) {
+          selectAirTrack(track);
+        }
       }
     );
 
@@ -4926,6 +5056,7 @@ marker.__airThreatCount =
 
     return true;
   }
+
 
 
   function buildSmoothCurvePoints(
