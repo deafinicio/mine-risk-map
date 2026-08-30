@@ -5451,7 +5451,7 @@ function updateThreatMarkerScale() {
           trackId &&
           typeof selectAirTrack === "function" &&
           (
-            airTrackDisplayMode !== "selected" ||
+            airTrackDisplayMode === "selected" &&
             selectedAirTrackId !== trackId
           )
         ) {
