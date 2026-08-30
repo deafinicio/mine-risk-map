@@ -6,6 +6,52 @@
   const AIR_LIMIT_THREADS = 200;
   const AIR_REFRESH_MS = 5000;
 
+/*
+ * Optional AIR debug mode.
+ *
+ * Example:
+ *   ?airDebugTrack=147323:147333
+ *
+ * Without this parameter normal live behaviour is unchanged.
+ */
+const AIR_DEBUG_TRACK_ID = (() => {
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const value = params.get("airDebugTrack");
+    return value ? String(value).trim() : "";
+  } catch (error) {
+    return "";
+  }
+})();
+
+
+function isRequestedAirDebugTrack(track) {
+  if (!AIR_DEBUG_TRACK_ID || !track) {
+    return false;
+  }
+
+  const candidates = [
+    track.track_id,
+    track.branch_id,
+    track.id
+  ]
+    .filter(
+      function(value) {
+        return value !== null &&
+          value !== undefined &&
+          String(value).length > 0;
+      }
+    )
+    .map(
+      function(value) {
+        return String(value);
+      }
+    );
+
+  return candidates.includes(AIR_DEBUG_TRACK_ID);
+}
+
+
   const AIR_DEMO_URL =
     "./demo-air.json";
 
@@ -6133,6 +6179,52 @@ coreLine.addTo(
      * Which tracks get detailed history and curves?
      */
     let detailRows = [];
+
+  /*
+   * AIR DEBUG TRACK OVERRIDE
+   *
+   * A requested historical track is added only to detailRows.
+   * It does NOT become an ACTIVE track and does NOT change
+   * the normal freshness/TTL calculations.
+   */
+  if (AIR_DEBUG_TRACK_ID) {
+
+    const debugTrack = trackRows.find(
+      function(track) {
+        return isRequestedAirDebugTrack(track);
+      }
+    );
+
+    if (debugTrack) {
+
+      const alreadyIncluded = detailRows.some(
+        function(track) {
+          return isRequestedAirDebugTrack(track);
+        }
+      );
+
+      if (!alreadyIncluded) {
+        detailRows = [
+          ...detailRows,
+          debugTrack
+        ];
+      }
+
+      console.info(
+        "[AIR DEBUG] historical track forced into detail view:",
+        AIR_DEBUG_TRACK_ID
+      );
+
+    } else {
+
+      console.warn(
+        "[AIR DEBUG] requested track is not present in API payload:",
+        AIR_DEBUG_TRACK_ID
+      );
+
+    }
+  }
+
 
 
     if (
