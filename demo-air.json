@@ -1,0 +1,569 @@
+{
+  "threads": [
+    {
+      "root_message_id": 910001,
+      "tracks": [
+        {
+          "track_id": "demo-kharkiv-shahed-1",
+          "active": true,
+          "threats": [
+            {
+              "id": "shahed",
+              "label": "Shahed"
+            }
+          ],
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910001,
+                  "telegram_date": "2026-08-20T06:40:00Z",
+                  "original_text": "Ударний БПЛА на Великих Проходах",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_velyki_prokhody",
+                      "canonical_name": "Великі Проходи",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.418, 50.170]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910002,
+                  "telegram_date": "2026-08-20T06:44:00Z",
+                  "original_text": "Далі на Руську Лозову",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910001,
+                  "places": [
+                    {
+                      "id": "demo_ruska_lozova",
+                      "canonical_name": "Руська Лозова",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.296, 50.141]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910003,
+                  "telegram_date": "2026-08-20T06:48:00Z",
+                  "original_text": "Далі на Північну Салтівку",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910002,
+                  "places": [
+                    {
+                      "id": "demo_north_saltivka",
+                      "canonical_name": "Північна Салтівка",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.355, 50.036]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910004,
+                  "telegram_date": "2026-08-20T06:52:00Z",
+                  "original_text": "Далі на 602-й мікрорайон",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910003,
+                  "places": [
+                    {
+                      "id": "demo_602",
+                      "canonical_name": "602-й мікрорайон",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.378, 50.016]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910010,
+      "tracks": [
+        {
+          "track_id": "demo-kharkiv-fpv-1",
+          "active": true,
+          "threats": [
+            {
+              "id": "fpv",
+              "label": "FPV"
+            }
+          ],
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910010,
+                  "telegram_date": "2026-08-20T06:46:00Z",
+                  "original_text": "FPV у районі Жуків",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_zhuky",
+                      "canonical_name": "Жуки",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.2916536, 50.0510776]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910011,
+                  "telegram_date": "2026-08-20T06:50:00Z",
+                  "original_text": "Далі на Шишківку",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910010,
+                  "places": [
+                    {
+                      "id": "demo_shyshkivka",
+                      "canonical_name": "Шишківка",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.2891754, 50.0318224]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910012,
+                  "telegram_date": "2026-08-20T06:54:00Z",
+                  "original_text": "Далі на Сокільники",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910011,
+                  "places": [
+                    {
+                      "id": "demo_sokolnyky",
+                      "canonical_name": "Сокільники",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.265, 50.024]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910020,
+      "tracks": [
+        {
+          "track_id": "demo-molniya-1",
+          "active": true,
+          "threats": [
+            {
+              "id": "molniya",
+              "label": "Молнія"
+            }
+          ],
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910020,
+                  "telegram_date": "2026-08-20T06:49:00Z",
+                  "original_text": "Молнія на Дергачі",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_derhachi",
+                      "canonical_name": "Дергачі",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.121, 50.107]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910021,
+                  "telegram_date": "2026-08-20T06:53:00Z",
+                  "original_text": "Молнія на Прудянку/Слатине",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910020,
+                  "places": [
+                    {
+                      "id": "demo_prudianka",
+                      "canonical_name": "Прудянка",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.166, 50.231]
+                      }
+                    },
+                    {
+                      "id": "demo_slatyne",
+                      "canonical_name": "Слатине",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.161, 50.210]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910030,
+      "tracks": [
+        {
+          "track_id": "demo-oblast-reactive-1",
+          "active": true,
+          "threats": [
+            {
+              "id": "jet_uav_unknown",
+              "label": "Реактивний БПЛА"
+            }
+          ],
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910030,
+                  "telegram_date": "2026-08-20T06:35:00Z",
+                  "original_text": "Реактивний БПЛА на Великий Бурлук",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_velykyi_burluk",
+                      "canonical_name": "Великий Бурлук",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [37.390, 50.061]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910031,
+                  "telegram_date": "2026-08-20T06:40:00Z",
+                  "original_text": "Далі на Печеніги",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910030,
+                  "places": [
+                    {
+                      "id": "demo_pechenihy",
+                      "canonical_name": "Печеніги",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.934, 49.863]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910032,
+                  "telegram_date": "2026-08-20T06:45:00Z",
+                  "original_text": "Далі на Кочеток",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910031,
+                  "places": [
+                    {
+                      "id": "demo_kochetok",
+                      "canonical_name": "Кочеток",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.731, 49.881]
+                      }
+                    }
+                  ]
+                },
+                {
+                  "message_id": 910033,
+                  "telegram_date": "2026-08-20T06:51:00Z",
+                  "original_text": "Далі на Чугуїв",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": 910032,
+                  "places": [
+                    {
+                      "id": "demo_chuhuiv",
+                      "canonical_name": "Чугуїв",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.687, 49.836]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910040,
+      "tracks": [
+        {
+          "track_id": "demo-kab-1",
+          "active": true,
+          "threats": [
+            {
+              "id": "kab",
+              "label": "КАБ"
+            }
+          ],
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910040,
+                  "telegram_date": "2026-08-20T06:47:00Z",
+                  "original_text": "КАБ на Липці",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_lyptsi",
+                      "canonical_name": "Липці",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.429, 50.211]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910050,
+      "tracks": [
+        {
+          "track_id": "demo-lost-1",
+          "active": false,
+          "threats": [
+            {
+              "id": "shahed",
+              "label": "Shahed"
+            }
+          ],
+          "current_terminal": {
+            "type": "lost_tracking",
+            "confidence": "confirmed",
+            "count": 1,
+            "scope": "object",
+            "drawable": true,
+            "telegram_date": "2026-08-20T06:55:00Z",
+            "source_text": "Локаційно не фіксується",
+            "last_place": {
+              "id": "demo_novi_domy",
+              "canonical_name": "Нові Дома",
+              "geometry_resolved": true,
+              "geometry_source": "demo",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [36.315, 49.958]
+              }
+            }
+          },
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910050,
+                  "telegram_date": "2026-08-20T06:49:00Z",
+                  "original_text": "Shahed на Нові Дома",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_novi_domy",
+                      "canonical_name": "Нові Дома",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.315, 49.958]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910060,
+      "tracks": [
+        {
+          "track_id": "demo-intercepted-1",
+          "active": false,
+          "threats": [
+            {
+              "id": "shahed_reactive",
+              "label": "Реактивний Shahed"
+            }
+          ],
+          "current_terminal": {
+            "type": "intercepted_reported",
+            "confidence": "confirmed",
+            "count": 1,
+            "scope": "object",
+            "drawable": true,
+            "telegram_date": "2026-08-20T06:56:00Z",
+            "source_text": "Збито",
+            "last_place": {
+              "id": "demo_osnova",
+              "canonical_name": "Основа",
+              "geometry_resolved": true,
+              "geometry_source": "demo",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [36.279, 49.923]
+              }
+            }
+          },
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910060,
+                  "telegram_date": "2026-08-20T06:51:00Z",
+                  "original_text": "Реактивний Shahed на Основу",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_osnova",
+                      "canonical_name": "Основа",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.279, 49.923]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+
+    {
+      "root_message_id": 910070,
+      "tracks": [
+        {
+          "track_id": "demo-fallen-1",
+          "active": false,
+          "threats": [
+            {
+              "id": "uav_unknown",
+              "label": "БПЛА"
+            }
+          ],
+          "current_terminal": {
+            "type": "fallen_reported",
+            "confidence": "confirmed",
+            "count": 1,
+            "scope": "object",
+            "drawable": true,
+            "telegram_date": "2026-08-20T06:57:00Z",
+            "source_text": "Повідомляється про падіння",
+            "last_place": {
+              "id": "demo_rohan",
+              "canonical_name": "Рогань",
+              "geometry_resolved": true,
+              "geometry_source": "demo",
+              "geometry": {
+                "type": "Point",
+                "coordinates": [36.501, 49.902]
+              }
+            }
+          },
+          "segments": [
+            {
+              "events": [
+                {
+                  "message_id": 910070,
+                  "telegram_date": "2026-08-20T06:52:00Z",
+                  "original_text": "БПЛА у районі Рогані",
+                  "reported_object_count": 1,
+                  "reply_to_message_id": null,
+                  "places": [
+                    {
+                      "id": "demo_rohan",
+                      "canonical_name": "Рогань",
+                      "geometry_resolved": true,
+                      "geometry_source": "demo",
+                      "geometry": {
+                        "type": "Point",
+                        "coordinates": [36.501, 49.902]
+                      }
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

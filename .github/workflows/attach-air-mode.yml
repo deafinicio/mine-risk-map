@@ -1,0 +1,49 @@
+name: Attach AIR mode script
+
+on:
+  push:
+    branches:
+      - feature/air-threat-layer
+    paths:
+      - .github/workflows/attach-air-mode.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  attach:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          ref: feature/air-threat-layer
+
+      - name: Add AIR mode script include
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          path = Path('index.html')
+          text = path.read_text(encoding='utf-8')
+          marker = '<script src="air-mode.js"></script>'
+
+          if marker not in text:
+              if '</body>' not in text:
+                  raise SystemExit('Could not find </body> in index.html')
+              text = text.replace('</body>', marker + '\n</body>', 1)
+              path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Commit change
+        run: |
+          if git diff --quiet; then
+            echo "No change needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "Load AIR mode controller"
+          git push origin HEAD:feature/air-threat-layer
