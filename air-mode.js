@@ -3920,6 +3920,18 @@ function updateThreatMarkerScale() {
       event.__monitor1654 ===
         true
     ) {
+      /*
+       * Monitor1654 often reports a fresh threat as a
+       * source-reported direction/reference rather than a
+       * confirmed reported_position.
+       *
+       * These events must refresh the logical threat lifetime,
+       * otherwise valid current summaries become stale
+       * immediately.
+       *
+       * This affects freshness only. A direction_target is
+       * still NOT treated as a confirmed physical position.
+       */
       return (
         Array.isArray(
           event.places
@@ -3928,8 +3940,11 @@ function updateThreatMarkerScale() {
           function(place) {
             return (
               place &&
-              place.location_role ===
-                "reported_position"
+              typeof isTrackableSourcePlace ===
+                "function" &&
+              isTrackableSourcePlace(
+                place
+              )
             );
           }
         )
