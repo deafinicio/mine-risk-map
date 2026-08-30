@@ -1,9 +1,9 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="uk">
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Mine Risk Map — Kharkiv Oblast</title>
+<title>Mine Risk Map вЂ” Kharkiv Oblast</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
@@ -15,12 +15,12 @@
 <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 
 <!-- Basic SEO -->
-<meta name="description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
+<meta name="description" content="Р†РЅС‚РµСЂР°РєС‚РёРІРЅР° РєР°СЂС‚Р° СЃРµСЃС–Р№ С–РЅС„РѕСЂРјСѓРІР°РЅРЅСЏ РЅР°СЃРµР»РµРЅРЅСЏ С‰РѕРґРѕ СЂРёР·РёРєС–РІ РІРёР±СѓС…РѕРЅРµР±РµР·РїРµС‡РЅРёС… РїСЂРµРґРјРµС‚С–РІ Сѓ РҐР°СЂРєС–РІСЃСЊРєС–Р№ РѕР±Р»Р°СЃС‚С–." />
 
 <!-- Open Graph -->
 <meta property="og:type" content="website" />
-<meta property="og:title" content="Mine Risk Map — Kharkiv Oblast" />
-<meta property="og:description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
+<meta property="og:title" content="Mine Risk Map вЂ” Kharkiv Oblast" />
+<meta property="og:description" content="Р†РЅС‚РµСЂР°РєС‚РёРІРЅР° РєР°СЂС‚Р° СЃРµСЃС–Р№ С–РЅС„РѕСЂРјСѓРІР°РЅРЅСЏ РЅР°СЃРµР»РµРЅРЅСЏ С‰РѕРґРѕ СЂРёР·РёРєС–РІ РІРёР±СѓС…РѕРЅРµР±РµР·РїРµС‡РЅРёС… РїСЂРµРґРјРµС‚С–РІ Сѓ РҐР°СЂРєС–РІСЃСЊРєС–Р№ РѕР±Р»Р°СЃС‚С–." />
 <meta property="og:url" content="https://deafinicio.github.io/mine-risk-map/" />
 <meta property="og:image" content="https://deafinicio.github.io/mine-risk-map/assets/preview-map.jpg" />
 <meta property="og:image:type" content="image/jpeg" />
@@ -31,8 +31,8 @@
 <meta property="og:image:secure_url" content="https://deafinicio.github.io/mine-risk-map/assets/preview-map.jpg" />
 <!-- Twitter / X -->
 <meta name="twitter:card" content="summary_large_image" />
-<meta name="twitter:title" content="Mine Risk Map — Kharkiv Oblast" />
-<meta name="twitter:description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
+<meta name="twitter:title" content="Mine Risk Map вЂ” Kharkiv Oblast" />
+<meta name="twitter:description" content="Р†РЅС‚РµСЂР°РєС‚РёРІРЅР° РєР°СЂС‚Р° СЃРµСЃС–Р№ С–РЅС„РѕСЂРјСѓРІР°РЅРЅСЏ РЅР°СЃРµР»РµРЅРЅСЏ С‰РѕРґРѕ СЂРёР·РёРєС–РІ РІРёР±СѓС…РѕРЅРµР±РµР·РїРµС‡РЅРёС… РїСЂРµРґРјРµС‚С–РІ Сѓ РҐР°СЂРєС–РІСЃСЊРєС–Р№ РѕР±Р»Р°СЃС‚С–." />
 <meta name="twitter:image" content="https://deafinicio.github.io/mine-risk-map/assets/preview-map.jpg" />
 
 <style>
@@ -629,7 +629,7 @@
   }
   .boot-line:empty::after{ content:""; }
   .boot-line:not(:empty)::after{
-    content:"▌";
+    content:"в–Њ";
     margin-left:2px;
     opacity:.8;
     animation: blink 1s step-start infinite;
@@ -666,7 +666,7 @@
   <div class="hud-sep"></div>
   <div class="hud-stat"><b id="hud-participants">0</b><span>participants</span></div>
   <div class="spacer"></div>
-  <div class="status-tag" id="hud-live">● LIVE FEED</div>
+  <div class="status-tag" id="hud-live">в—Џ LIVE FEED</div>
 </div>
 
 <div id="map"></div>
@@ -682,7 +682,7 @@
 <div id="ruler-left" class="ruler"></div>
 <div id="ruler-right" class="ruler"></div>
 
-<div id="coord-readout"><span class="lbl">LAT</span><span id="coord-lat">—</span> &nbsp; <span class="lbl">LON</span><span id="coord-lon">—</span></div>
+<div id="coord-readout"><span class="lbl">LAT</span><span id="coord-lat">вЂ”</span> &nbsp; <span class="lbl">LON</span><span id="coord-lon">вЂ”</span></div>
 
 <div id="radar"><span>SCAN</span></div>
 
@@ -717,7 +717,7 @@ function normalizeText(value) {
   return String(value || "")
     .trim()
     .toLowerCase()
-    .replace(/[`ʼ']/g, "’")
+    .replace(/[`Кј']/g, "вЂ™")
     .replace(/\s+/g, " ");
 }
 
@@ -834,7 +834,7 @@ function renderRulers() {
   var hTicks = "";
   for (var x = margin; x < size.x - margin; x += stepX) {
     var lngAt = map.containerPointToLatLng([x, 0]).lng;
-    hTicks += '<span class="tick" style="left:' + x + 'px">' + lngAt.toFixed(3) + "°</span>";
+    hTicks += '<span class="tick" style="left:' + x + 'px">' + lngAt.toFixed(3) + "В°</span>";
   }
   topRuler.innerHTML = hTicks;
   bottomRuler.innerHTML = hTicks;
@@ -844,8 +844,8 @@ function renderRulers() {
   for (var y = margin; y < size.y - margin; y += stepY) {
     var latAtLeft = map.containerPointToLatLng([0, y]).lat;
     var latAtRight = map.containerPointToLatLng([size.x, y]).lat;
-    vTicksLeft += '<span class="tick" style="top:' + y + 'px">' + latAtLeft.toFixed(3) + "°</span>";
-    vTicksRight += '<span class="tick" style="top:' + y + 'px">' + latAtRight.toFixed(3) + "°</span>";
+    vTicksLeft += '<span class="tick" style="top:' + y + 'px">' + latAtLeft.toFixed(3) + "В°</span>";
+    vTicksRight += '<span class="tick" style="top:' + y + 'px">' + latAtRight.toFixed(3) + "В°</span>";
   }
   leftRuler.innerHTML = vTicksLeft;
   rightRuler.innerHTML = vTicksRight;
@@ -884,7 +884,7 @@ function showLockReticle(containerPoint) {
 
 // ===== BASEMAPS =====
 var dark = L.tileLayer(
-  "https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png",
+  "https://basemaps.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}.png?key=cb1_2jr7_1_fd2dc9950c39dad7aa73524e",
   { maxZoom: 20, crossOrigin: true, attribution: "&copy; OpenStreetMap &copy; CARTO" }
 );
 
@@ -915,7 +915,7 @@ fallback(dark, carto);
 fallback(carto, osm);
 
 var baseLayers = {
-  "Dark Ops (за замовч.)": dark,
+  "Dark Ops (Р·Р° Р·Р°РјРѕРІС‡.)": dark,
   "Carto Voyager": carto,
   "OpenStreetMap": osm
 };
@@ -967,7 +967,7 @@ function convertRowsToFeatures(rows) {
     const settlementPoint = settlementsLookup.get(key);
 
     if (!settlementPoint) {
-      console.warn("Не знайдено населений пункт у довіднику:", row);
+      console.warn("РќРµ Р·РЅР°Р№РґРµРЅРѕ РЅР°СЃРµР»РµРЅРёР№ РїСѓРЅРєС‚ Сѓ РґРѕРІС–РґРЅРёРєСѓ:", row);
       return;
     }
 
@@ -1035,14 +1035,14 @@ function buildLayers(features) {
         .join(", ");
 
       var html =
-        "<b>" + (p.settlement || "Населений пункт") + "</b><br>" +
-        (p.hromada || "—") + (p.raion ? ", " + p.raion : "") + "<br>" +
-        "Дата: " + (p.session_date || "—") + "<br>" +
-        "Інструктори: " + (instructors || "—") + "<br>" +
-        "Усього учасників: " + (p.participants_total ?? "—") + "<br>" +
-        "До 18: " + (p.participants_u18 ?? "—") + "<br>" +
-        "18+: " + (p.participants_18plus ?? "—") +
-        (p.notes ? "<br>Примітки: " + p.notes : "");
+        "<b>" + (p.settlement || "РќР°СЃРµР»РµРЅРёР№ РїСѓРЅРєС‚") + "</b><br>" +
+        (p.hromada || "вЂ”") + (p.raion ? ", " + p.raion : "") + "<br>" +
+        "Р”Р°С‚Р°: " + (p.session_date || "вЂ”") + "<br>" +
+        "Р†РЅСЃС‚СЂСѓРєС‚РѕСЂРё: " + (instructors || "вЂ”") + "<br>" +
+        "РЈСЃСЊРѕРіРѕ СѓС‡Р°СЃРЅРёРєС–РІ: " + (p.participants_total ?? "вЂ”") + "<br>" +
+        "Р”Рѕ 18: " + (p.participants_u18 ?? "вЂ”") + "<br>" +
+        "18+: " + (p.participants_18plus ?? "вЂ”") +
+        (p.notes ? "<br>РџСЂРёРјС–С‚РєРё: " + p.notes : "");
 
       layer.bindPopup(html);
 
@@ -1150,10 +1150,10 @@ function populateFilterOptions(features) {
       });
   }
 
-  fillSelect(instructorSelect, instructors, "Усі інструктори");
-  fillSelect(raionSelect, raions, "Усі райони");
-  fillSelect(hromadaSelect, hromadas, "Усі громади");
-  fillSelect(settlementSelect, settlements, "Усі населені пункти");
+  fillSelect(instructorSelect, instructors, "РЈСЃС– С–РЅСЃС‚СЂСѓРєС‚РѕСЂРё");
+  fillSelect(raionSelect, raions, "РЈСЃС– СЂР°Р№РѕРЅРё");
+  fillSelect(hromadaSelect, hromadas, "РЈСЃС– РіСЂРѕРјР°РґРё");
+  fillSelect(settlementSelect, settlements, "РЈСЃС– РЅР°СЃРµР»РµРЅС– РїСѓРЅРєС‚Рё");
 }
 
 function repopulateSettlementOptions(selectedRaion, selectedHromada) {
@@ -1168,7 +1168,7 @@ function repopulateSettlementOptions(selectedRaion, selectedHromada) {
     if (okRaion && okHromada && p.settlement) settlements.add(p.settlement);
   });
 
-  settlementSelect.innerHTML = '<option value="">Усі населені пункти</option>';
+  settlementSelect.innerHTML = '<option value="">РЈСЃС– РЅР°СЃРµР»РµРЅС– РїСѓРЅРєС‚Рё</option>';
   [...settlements]
     .sort((a, b) => a.localeCompare(b, "uk"))
     .forEach(function(value) {
@@ -1215,7 +1215,7 @@ function applyFilters() {
 async function loadLiveSessions() {
   var liveTag = document.getElementById("hud-live");
   try {
-    if (liveTag) { liveTag.textContent = "● SYNCING"; liveTag.style.color = "var(--amber)"; }
+    if (liveTag) { liveTag.textContent = "в—Џ SYNCING"; liveTag.style.color = "var(--amber)"; }
 
     const [settlementsResponse, sessionsResponse] = await Promise.all([
       fetch(SETTLEMENTS_GEOJSON_URL + "?nocache=" + Date.now()),
@@ -1223,11 +1223,11 @@ async function loadLiveSessions() {
     ]);
 
     if (!settlementsResponse.ok) {
-      throw new Error("Не вдалося завантажити довідник населених пунктів");
+      throw new Error("РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё РґРѕРІС–РґРЅРёРє РЅР°СЃРµР»РµРЅРёС… РїСѓРЅРєС‚С–РІ");
     }
 
     if (!sessionsResponse.ok) {
-      throw new Error("Не вдалося завантажити живі дані з Google Sheets");
+      throw new Error("РќРµ РІРґР°Р»РѕСЃСЏ Р·Р°РІР°РЅС‚Р°Р¶РёС‚Рё Р¶РёРІС– РґР°РЅС– Р· Google Sheets");
     }
 
     const settlementsGeo = await settlementsResponse.json();
@@ -1238,10 +1238,10 @@ async function loadLiveSessions() {
     buildLayers(allSessions);
     populateFilterOptions(allSessions);
 
-    if (liveTag) { liveTag.textContent = "● LIVE FEED"; liveTag.style.color = ""; }
+    if (liveTag) { liveTag.textContent = "в—Џ LIVE FEED"; liveTag.style.color = ""; }
   } catch (error) {
     console.error(error);
-    if (liveTag) { liveTag.textContent = "● FEED ERROR"; liveTag.style.color = "var(--red)"; }
+    if (liveTag) { liveTag.textContent = "в—Џ FEED ERROR"; liveTag.style.color = "var(--red)"; }
   }
 }
 
@@ -1253,15 +1253,15 @@ searchControl.onAdd = function() {
 
   div.innerHTML =
     '<div class="section-title">Target Filters</div>' +
-    '<label>Період від</label><input type="date" id="start-date" />' +
-    '<label>Період до</label><input type="date" id="end-date" />' +
-    '<label>Інструктор</label><select id="instructor-filter"><option value="">Усі інструктори</option></select>' +
-    '<label>Район</label><select id="raion-filter"><option value="">Усі райони</option></select>' +
-    '<label>Громада</label><select id="hromada-filter"><option value="">Усі громади</option></select>' +
-    '<label>Населений пункт</label><select id="settlement-filter"><option value="">Усі населені пункти</option></select>' +
-    '<button id="filter-btn">Застосувати</button>' +
-    '<button id="reset-btn">Скинути фільтри</button>' +
-    '<button id="refresh-btn">Оновити дані</button>' +
+    '<label>РџРµСЂС–РѕРґ РІС–Рґ</label><input type="date" id="start-date" />' +
+    '<label>РџРµСЂС–РѕРґ РґРѕ</label><input type="date" id="end-date" />' +
+    '<label>Р†РЅСЃС‚СЂСѓРєС‚РѕСЂ</label><select id="instructor-filter"><option value="">РЈСЃС– С–РЅСЃС‚СЂСѓРєС‚РѕСЂРё</option></select>' +
+    '<label>Р Р°Р№РѕРЅ</label><select id="raion-filter"><option value="">РЈСЃС– СЂР°Р№РѕРЅРё</option></select>' +
+    '<label>Р“СЂРѕРјР°РґР°</label><select id="hromada-filter"><option value="">РЈСЃС– РіСЂРѕРјР°РґРё</option></select>' +
+    '<label>РќР°СЃРµР»РµРЅРёР№ РїСѓРЅРєС‚</label><select id="settlement-filter"><option value="">РЈСЃС– РЅР°СЃРµР»РµРЅС– РїСѓРЅРєС‚Рё</option></select>' +
+    '<button id="filter-btn">Р—Р°СЃС‚РѕСЃСѓРІР°С‚Рё</button>' +
+    '<button id="reset-btn">РЎРєРёРЅСѓС‚Рё С„С–Р»СЊС‚СЂРё</button>' +
+    '<button id="refresh-btn">РћРЅРѕРІРёС‚Рё РґР°РЅС–</button>' +
     '<div id="export-status" class="export-status"></div>';
 
   L.DomEvent.disableClickPropagation(div);
@@ -1275,9 +1275,9 @@ var topLeftIcons = L.control({ position: "topleft" });
 topLeftIcons.onAdd = function() {
   var div = L.DomUtil.create("div", "icon-control");
   div.innerHTML = `
-    <button id="toggle-heat-settings" title="Налаштування heatmap">SET</button>
-    <button id="export-png-btn" title="Експорт PNG">PNG</button>
-    <button id="toggle-filters-btn" title="Показати / сховати фільтри">FLT</button>
+    <button id="toggle-heat-settings" title="РќР°Р»Р°С€С‚СѓРІР°РЅРЅСЏ heatmap">SET</button>
+    <button id="export-png-btn" title="Р•РєСЃРїРѕСЂС‚ PNG">PNG</button>
+    <button id="toggle-filters-btn" title="РџРѕРєР°Р·Р°С‚Рё / СЃС…РѕРІР°С‚Рё С„С–Р»СЊС‚СЂРё">FLT</button>
   `;
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -1311,10 +1311,10 @@ heatSettingsControl.onAdd = function() {
     <label class="small-label">Min floor <span id="floor-value">${heatSettings.minFloor}</span></label>
     <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
 
-    <label class="small-label">Фіолетовий <span id="purple-value">${heatSettings.purpleStrength}</span></label>
+    <label class="small-label">Р¤С–РѕР»РµС‚РѕРІРёР№ <span id="purple-value">${heatSettings.purpleStrength}</span></label>
     <input type="range" id="purple-slider" min="30" max="120" step="1" value="${heatSettings.purpleStrength}">
 
-    <button id="reset-heat-settings">Скинути</button>
+    <button id="reset-heat-settings">РЎРєРёРЅСѓС‚Рё</button>
   `;
 
   L.DomEvent.disableClickPropagation(div);
@@ -1345,7 +1345,7 @@ function refreshHeatmapSettings() {
 
 async function exportMapToPNG() {
   const status = document.getElementById("export-status");
-  if (status) status.textContent = "Готую PNG...";
+  if (status) status.textContent = "Р“РѕС‚СѓСЋ PNG...";
 
   const heatPanel = document.getElementById("heat-settings-panel");
   const oldDisplay = heatPanel ? heatPanel.style.display : "";
@@ -1364,7 +1364,7 @@ async function exportMapToPNG() {
 
     canvas.toBlob(function(blob) {
       if (!blob) {
-        if (status) status.textContent = "Не вдалося створити PNG.";
+        if (status) status.textContent = "РќРµ РІРґР°Р»РѕСЃСЏ СЃС‚РІРѕСЂРёС‚Рё PNG.";
         return;
       }
 
@@ -1379,11 +1379,11 @@ async function exportMapToPNG() {
         ".png";
 
       downloadBlob(blob, filename);
-      if (status) status.textContent = "PNG експортовано.";
+      if (status) status.textContent = "PNG РµРєСЃРїРѕСЂС‚РѕРІР°РЅРѕ.";
     });
   } catch (error) {
     console.error(error);
-    if (status) status.textContent = "Помилка експорту PNG.";
+    if (status) status.textContent = "РџРѕРјРёР»РєР° РµРєСЃРїРѕСЂС‚Сѓ PNG.";
   } finally {
     if (heatPanel) heatPanel.style.display = oldDisplay;
   }
@@ -1494,7 +1494,7 @@ setTimeout(function() {
       }
     });
 
-    hromadaSelect.innerHTML = '<option value="">Усі громади</option>';
+    hromadaSelect.innerHTML = '<option value="">РЈСЃС– РіСЂРѕРјР°РґРё</option>';
     [...hromadas]
       .sort((a, b) => a.localeCompare(b, "uk"))
       .forEach(function(value) {
@@ -1504,7 +1504,7 @@ setTimeout(function() {
         hromadaSelect.appendChild(option);
       });
 
-    // Район змінився -> громада скинута, тож населені пункти звужуємо лише за районом
+    // Р Р°Р№РѕРЅ Р·РјС–РЅРёРІСЃСЏ -> РіСЂРѕРјР°РґР° СЃРєРёРЅСѓС‚Р°, С‚РѕР¶ РЅР°СЃРµР»РµРЅС– РїСѓРЅРєС‚Рё Р·РІСѓР¶СѓС”РјРѕ Р»РёС€Рµ Р·Р° СЂР°Р№РѕРЅРѕРј
     repopulateSettlementOptions(selectedRaion, "");
   });
 
@@ -1529,8 +1529,8 @@ heatProxy.on("remove", function() {
 });
 
 var overlays = {
-  "Кластер точок": clusterLayer,
-  "Heatmap всієї області": heatProxy
+  "РљР»Р°СЃС‚РµСЂ С‚РѕС‡РѕРє": clusterLayer,
+  "Heatmap РІСЃС–С”С— РѕР±Р»Р°СЃС‚С–": heatProxy
 };
 
 L.control.layers(baseLayers, overlays, { collapsed: false }).addTo(map);
@@ -1581,7 +1581,7 @@ async function runBootSequence(dataPromise) {
   await typeLine(line3, "> LOADING GRID...", 18);
   barFill.style.width = "80%";
 
-  // чекаємо реальні дані з Google Sheets, але не довше 4с
+  // С‡РµРєР°С”РјРѕ СЂРµР°Р»СЊРЅС– РґР°РЅС– Р· Google Sheets, Р°Р»Рµ РЅРµ РґРѕРІС€Рµ 4СЃ
   await Promise.race([dataPromise, wait(4000)]);
 
   barFill.style.width = "100%";
@@ -1597,3 +1597,4 @@ runBootSequence(sessionsLoadPromise);
 </script>
 </body>
 </html>
+
