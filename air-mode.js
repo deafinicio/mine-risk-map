@@ -1,7 +1,7 @@
 (function () {
   "use strict";
 
-  const AIR_API_URL = "https://89-168-114-2.sslip.io/api/air/tracks";
+  const AIR_API_URL = "https://89-168-114-2.sslip.io/api/monitor/tracks";
   const AIR_LOOKBACK_HOURS = 12;
   const AIR_LIMIT_THREADS = 200;
   const AIR_REFRESH_MS = 15000;
@@ -1057,8 +1057,35 @@ function rerenderAirVisuals() {
       return "kab";
     }
 
-    if (joined.includes("tactical_aviation")) {
+    if (
+      joined.includes("tactical_aviation") ||
+      joined.includes("aviation")
+    ) {
       return "tactical_aviation";
+    }
+
+    if (
+      joined.includes("ballistic")
+    ) {
+      return "missile";
+    }
+
+    if (
+      joined.includes("reactive_uav")
+    ) {
+      return "jet_uav_unknown";
+    }
+
+    if (
+      joined.includes("recon_uav")
+    ) {
+      return "recon_uav_unknown";
+    }
+
+    if (
+      joined.includes("attack_uav")
+    ) {
+      return "attack_uav_unknown";
     }
 
     if (joined.includes("jet_uav_unknown")) {
@@ -3285,6 +3312,27 @@ function updateThreatMarkerScale() {
     }
 
 
+    if (
+      event.__monitor1654 ===
+        true
+    ) {
+      return (
+        Array.isArray(
+          event.places
+        ) &&
+        event.places.some(
+          function(place) {
+            return (
+              place &&
+              place.location_role ===
+                "reported_position"
+            );
+          }
+        )
+      );
+    }
+
+
     /*
      * Closing/terminal messages must not artificially
      * extend the LIVE lifetime of an object.
@@ -3584,6 +3632,267 @@ function updateThreatMarkerScale() {
     }
   }
 
+  // =========================================================
+  // MONITOR1654 API ADAPTER
+  // =========================================================
+
+  function monitorPlaceToAirPlace(place) {
+    if (!place || typeof place !== "object") return place;
+
+    const result = { ...place };
+
+    if (!result.id && result.place_id) {
+      result.id = result.place_id;
+    }
+
+    if (!result.canonical_name && result.name) {
+      result.canonical_name = result.name;
+    }
+
+    const lat = Number(result.lat);
+    const lng = Number(result.lng);
+
+    if (
+      result.geometry_resolved === true &&
+      Number.isFinite(lat) &&
+      Number.isFinite(lng)
+    ) {
+      result.geometry = {
+        type: "Point",
+        coordinates: [lng, lat]
+      };
+    }
+
+    return result;
+  }
+
+
+  function monitorPointToAirPlace(point, locationRole) {
+    if (!point || typeof point !== "object") {
+      return null;
+    }
+
+    const lat = Number(point.lat);
+    const lng = Number(point.lng);
+
+    const resolved =
+      Number.isFinite(lat) &&
+      Number.isFinite(lng);
+
+    const place = {
+      id: point.place_id || null,
+      place_id: point.place_id || null,
+      canonical_name: point.name || null,
+      name: point.name || null,
+      location_role: locationRole || null,
+      geometry_resolved: resolved,
+      lat: resolved ? lat : null,
+      lng: resolved ? lng : null
+    };
+
+    if (resolved) {
+      place.geometry = {
+        type: "Point",
+        coordinates: [lng, lat]
+      };
+    }
+
+    return place;
+  }
+
+
+  function monitorTerminalFromTrack(sourceTrack) {
+    if (!sourceTrack || typeof sourceTrack !== "object") {
+      return null;
+    }
+
+    const typeMap = {
+      fallen: "fallen_reported",
+      intercepted: "intercepted_reported",
+      lost_tracking: "lost_tracking"
+    };
+
+    const terminalType =
+      typeMap[sourceTrack.status];
+
+    if (!terminalType) {
+      return null;
+    }
+
+    const events =
+      Array.isArray(sourceTrack.events)
+        ? sourceTrack.events
+        : [];
+
+    const lastEvent =
+      events.length
+        ? events[events.length - 1]
+        : null;
+
+    const place =
+      monitorPointToAirPlace(
+        sourceTrack.last_reported_position,
+        "reported_position"
+      );
+
+    return {
+      type: terminalType,
+      message_id:
+        lastEvent && lastEvent.message_id,
+      telegram_date:
+        (lastEvent && lastEvent.telegram_date) ||
+        sourceTrack.updated_at,
+      source_text:
+        (lastEvent && lastEvent.text) || "",
+      threats:
+        sourceTrack.threat
+          ? [{
+              id: sourceTrack.threat,
+              canonical_name: sourceTrack.threat
+            }]
+          : [],
+      count: sourceTrack.object_count || 1,
+      confidence: "source_reported",
+      last_place: place,
+      drawable: Boolean(
+        place &&
+        place.geometry_resolved
+      ),
+      position_ambiguous: false,
+      superseded_by_message_id: null
+    };
+  }
+
+
+  function normalizeMonitorPayload(payload) {
+    if (
+      !payload ||
+      payload.source !== "monitor1654" ||
+      !Array.isArray(payload.tracks)
+    ) {
+      return payload;
+    }
+
+    const threads =
+      payload.tracks.map(
+        function(sourceTrack) {
+
+          const events =
+            (
+              Array.isArray(sourceTrack.events)
+                ? sourceTrack.events
+                : []
+            ).map(
+              function(sourceEvent) {
+
+                const places =
+                  (
+                    Array.isArray(sourceEvent.places)
+                      ? sourceEvent.places
+                      : []
+                  ).map(monitorPlaceToAirPlace);
+
+                const explicitThreats =
+                  sourceEvent.explicit_threat
+                    ? [{
+                        id: sourceEvent.explicit_threat,
+                        canonical_name:
+                          sourceEvent.explicit_threat
+                      }]
+                    : [];
+
+                return {
+                  ...sourceEvent,
+                  __monitor1654: true,
+                  places: places,
+                  original_text:
+                    sourceEvent.text || "",
+                  reported_object_count:
+                    sourceEvent.object_count || 1,
+                  explicit_threats:
+                    explicitThreats,
+                  inherited_threats:
+                    (
+                      sourceEvent.threat_inherited &&
+                      sourceEvent.threat
+                    )
+                      ? [{
+                          id: sourceEvent.threat,
+                          canonical_name:
+                            sourceEvent.threat
+                        }]
+                      : []
+                };
+              }
+            );
+
+          const threatList =
+            sourceTrack.threat
+              ? [{
+                  id: sourceTrack.threat,
+                  canonical_name:
+                    sourceTrack.threat
+                }]
+              : [];
+
+          const normalizedTrack = {
+            ...sourceTrack,
+            __monitor1654: true,
+            track_id:
+              sourceTrack.branch_id,
+            active:
+              sourceTrack.is_active === true &&
+              sourceTrack.status !== "lost_tracking",
+            threats:
+              threatList,
+            segments: [{
+              segment_id:
+                sourceTrack.branch_id,
+              events:
+                events,
+              places: [],
+              drawable_edges: []
+            }],
+            current_terminal:
+              monitorTerminalFromTrack(
+                sourceTrack
+              )
+          };
+
+          return {
+            root_message_id:
+              sourceTrack.root_message_id,
+            branch_id:
+              sourceTrack.branch_id,
+            active:
+              normalizedTrack.active,
+            latest_status:
+              sourceTrack.status,
+            first_seen:
+              sourceTrack.started_at,
+            last_seen:
+              sourceTrack.updated_at,
+            last_message_id:
+              sourceTrack.last_message_id,
+            event_count:
+              events.length,
+            track_count: 1,
+            tracks: [
+              normalizedTrack
+            ]
+          };
+        }
+      );
+
+    return {
+      ...payload,
+      threads: threads,
+      thread_count: threads.length,
+      track_count: threads.length
+    };
+  }
+
+
   function getThreads(payload) {
     return payload && Array.isArray(payload.threads)
       ? payload.threads
@@ -3689,12 +3998,29 @@ function updateThreatMarkerScale() {
             eventIndex
           ];
 
-        const places =
+        let places =
           Array.isArray(
             event.places
           )
             ? event.places
             : [];
+
+
+        if (
+          event.__monitor1654 ===
+            true
+        ) {
+          places =
+            places.filter(
+              function(place) {
+                return (
+                  place &&
+                  place.location_role ===
+                    "reported_position"
+                );
+              }
+            );
+        }
 
 
         const observations =
@@ -3777,10 +4103,26 @@ function updateThreatMarkerScale() {
     const report = sourceText(event);
     const isCurrent = kind === "current";
 
+    const isDirectionTarget =
+      Boolean(
+        place &&
+        place.location_role ===
+          "direction_target"
+      );
+
+    const positionLabel =
+      isCurrent
+        ? "CURRENT REPORTED POSITION"
+        : (
+            isDirectionTarget
+              ? "SOURCE-REPORTED DIRECTION TARGET"
+              : "REPORTED POSITION"
+          );
+
     let html =
       "<b>" + escapeHtml(threatLabel(track)) + "</b><br>" +
       '<span style="color:' + (isCurrent ? 'var(--cyan)' : 'var(--text-dim)') + '">' +
-      (isCurrent ? "CURRENT REPORTED POSITION" : "REPORTED POSITION") +
+      positionLabel +
       "</span><br>" +
       "Місце: " + escapeHtml(place.canonical_name || place.id || "—") + "<br>" +
       "Час повідомлення: " + formatDate(event.telegram_date) + "<br>" +
@@ -4198,6 +4540,29 @@ coreLine.addTo(
           : [];
 
 
+      const isMonitorTrack =
+        track &&
+        track.__monitor1654 ===
+          true;
+
+
+      if (
+        isMonitorTrack &&
+        events.some(
+          function(event) {
+            return (
+              Number(
+                event &&
+                event.object_count
+              ) > 1
+            );
+          }
+        )
+      ) {
+        return;
+      }
+
+
       // -----------------------------------------------------
       // Prepare resolved places for every event
       // -----------------------------------------------------
@@ -4254,6 +4619,7 @@ coreLine.addTo(
 
         for (
           let i = 0;
+          !isMonitorTrack &&
           i < resolvedPlaces.length - 1;
           i += 1
         ) {
@@ -4354,6 +4720,17 @@ coreLine.addTo(
         if (
           parentInfo.places.length === 0 ||
           childInfo.places.length === 0
+        ) {
+          return;
+        }
+
+
+        if (
+          isMonitorTrack &&
+          (
+            parentInfo.places.length !== 1 ||
+            childInfo.places.length !== 1
+          )
         ) {
           return;
         }
@@ -5484,13 +5861,16 @@ coreLine.addTo(
             AIR_LOOKBACK_HOURS
           ),
 
-        limit_threads:
+        limit:
           String(
             AIR_LIMIT_THREADS
           ),
 
-        map_ready_only:
-          "true"
+        active_only:
+          "false",
+
+        geometry_only:
+          "false"
       });
 
 
@@ -5747,7 +6127,16 @@ coreLine.addTo(
         throw new Error("AIR API HTTP " + response.status);
       }
 
-      const payload = await response.json();
+      let payload = await response.json();
+
+      if (
+        airDataMode === "live"
+      ) {
+        payload =
+          normalizeMonitorPayload(
+            payload
+          );
+      }
 
       normalizeDemoPayloadTime(
         payload
