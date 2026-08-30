@@ -6216,57 +6216,6 @@ coreLine.addTo(
      */
     let detailRows = [];
 
-  /*
-   * AIR DEBUG TRACK OVERRIDE
-   *
-   * A requested historical track is added only to detailRows.
-   * It does NOT become an ACTIVE track and does NOT change
-   * the normal freshness/TTL calculations.
-   */
-  if (AIR_DEBUG_TRACK_ID) {
-
-    const debugTrack = trackRows.find(
-      function(row) {
-        return isRequestedAirDebugTrack(
-          row && row.track
-        );
-      }
-    );
-
-    if (debugTrack) {
-
-      const alreadyIncluded = detailRows.some(
-        function(row) {
-          return isRequestedAirDebugTrack(
-            row && row.track
-          );
-        }
-      );
-
-      if (!alreadyIncluded) {
-        detailRows = [
-          ...detailRows,
-          debugTrack
-        ];
-      }
-
-      console.info(
-        "[AIR DEBUG] historical track forced into detail view:",
-        AIR_DEBUG_TRACK_ID
-      );
-
-    } else {
-
-      console.warn(
-        "[AIR DEBUG] requested track is not present in API payload:",
-        AIR_DEBUG_TRACK_ID
-      );
-
-    }
-  }
-
-
-
     if (
       airTrackDisplayMode ===
       "all"
@@ -6331,6 +6280,66 @@ coreLine.addTo(
 
           }
         );
+    }
+
+
+    /*
+     * Historical debug tracks are deliberately appended
+     * AFTER normal ALL / SELECTED filtering.
+     *
+     * They remain inactive and therefore never become
+     * CURRENT POSITION markers or increase ACTIVE TRACKS.
+     */
+    if (AIR_DEBUG_TRACK_ID) {
+
+      const historicalDebugRows =
+        trackRows.filter(
+          function(row) {
+            return Boolean(
+              row &&
+              row.track &&
+              row.track.__airDebugHistorical ===
+                true
+            );
+          }
+        );
+
+
+      historicalDebugRows.forEach(
+        function(row) {
+
+          const key =
+            airTrackKey(
+              row.track
+            );
+
+
+          const alreadyIncluded =
+            detailRows.some(
+              function(existingRow) {
+                return (
+                  airTrackKey(
+                    existingRow.track
+                  ) === key
+                );
+              }
+            );
+
+
+          if (!alreadyIncluded) {
+            detailRows.push(
+              row
+            );
+          }
+
+        }
+      );
+
+
+      console.info(
+        "[AIR DEBUG] historical tracks rendered:",
+        historicalDebugRows.length
+      );
     }
 
 
@@ -7160,6 +7169,31 @@ coreLine.addTo(
               )
                 ? debugPayload.threads
                 : [];
+
+
+            /*
+             * Explicitly mark tracks coming from the
+             * historical debug endpoint.
+             *
+             * Rendering can then identify them without
+             * depending on normal API list lookup.
+             */
+            debugThreads.forEach(
+              function(thread) {
+
+                (
+                  Array.isArray(thread.tracks)
+                    ? thread.tracks
+                    : []
+                ).forEach(
+                  function(track) {
+                    track.__airDebugHistorical =
+                      true;
+                  }
+                );
+
+              }
+            );
 
 
             if (debugThreads.length > 0) {
