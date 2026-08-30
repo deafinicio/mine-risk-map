@@ -6974,9 +6974,18 @@ coreLine.addTo(
               );
 
 
+            /*
+             * Clicking a threat must NOT change the
+             * user-selected track display mode.
+             *
+             * ALL  -> stays ALL
+             * OFF  -> stays OFF
+             * SEL  -> stays SEL and changes only
+             *         which track is selected.
+             */
             if (
-              airTrackDisplayMode !==
-                "selected" ||
+              airTrackDisplayMode ===
+                "selected" &&
               selectedAirTrackId !==
                 trackId
             ) {
