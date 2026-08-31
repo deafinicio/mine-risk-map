@@ -932,59 +932,163 @@ root.style.setProperty(
     return payload;
   }
 
-  function applyMonitorTerminalAnchorOverrides(payload) {
-    if (!payload) return payload;
+    function applyMonitorTerminalAnchorOverrides(
+    payload
+  ) {
+    /*
+     * Terminal reports such as:
+     *
+     *   "Більше не відстежується"
+     *   "Впала в області"
+     *   "Збито"
+     *
+     * frequently contain no geographic point of their own.
+     *
+     * In that case the terminal pictogram must be anchored to
+     * the LAST resolved source-reported reference in the same
+     * explicit Telegram reply branch, not the first position.
+     *
+     * If the terminal event itself DOES contain a resolved
+     * place, that explicit terminal-event place has priority.
+     */
+    const threads =
+      payload &&
+      Array.isArray(payload.threads)
+        ? payload.threads
+        : [];
 
-    (payload.threads || [])
-      .forEach(function(thread) {
-        (thread.tracks || [])
-          .forEach(function(track) {
-            if (
-              !track ||
-              track.__monitor1654 !== true ||
-              !track.current_terminal
-            ) {
-              return;
-            }
+    threads.forEach(function(thread) {
+      (
+        Array.isArray(thread.tracks)
+          ? thread.tracks
+          : []
+      ).forEach(function(track) {
+        if (
+          !track ||
+          track.__monitor1654 !== true ||
+          !track.current_terminal
+        ) {
+          return;
+        }
 
-            const terminal =
-              track.current_terminal;
+        const terminal =
+          track.current_terminal;
 
-            const status =
-              String(
-                terminal.status ||
-                ""
-              ).toLowerCase();
+        const terminalTypes =
+          new Set([
+            "lost_tracking",
+            "fallen_reported",
+            "intercepted_reported"
+          ]);
 
-            if (
-              status !== "lost_tracking"
-            ) {
-              return;
-            }
+        if (
+          !terminalTypes.has(
+            terminal.type
+          )
+        ) {
+          return;
+        }
 
-            let latestPlace = null;
-
-            (track.segments || [])
-              .forEach(function(segment) {
-                (segment.events || [])
-                  .forEach(function(event) {
-                    resolvedSourcePlaces(event)
-                      .forEach(function(item) {
-                        latestPlace =
-                          item.place;
-                      });
-                  });
-              });
-
-            if (latestPlace) {
-              terminal.last_place =
-                latestPlace;
-
-              terminal.__anchored_to_latest_source_reference =
-                true;
-            }
+        const events =
+          (
+            Array.isArray(track.segments)
+              ? track.segments
+              : []
+          ).flatMap(function(segment) {
+            return Array.isArray(segment.events)
+              ? segment.events
+              : [];
           });
+
+        if (!events.length) {
+          return;
+        }
+
+        const lastEvent =
+          events[
+            events.length - 1
+          ];
+
+        function resolvedTrackablePlaces(event) {
+          return (
+            event &&
+            Array.isArray(event.places)
+              ? event.places
+                  .filter(function(place) {
+                    return (
+                      place &&
+                      place.geometry_resolved === true &&
+                      (
+                        typeof isTrackableSourcePlace !==
+                          "function" ||
+                        isTrackableSourcePlace(place)
+                      ) &&
+                      geometryToLatLng(place)
+                    );
+                  })
+              : []
+          );
+        }
+
+        /*
+         * 1) Prefer an explicit resolved place contained in
+         *    the terminal message itself.
+         */
+        let anchorPlaces =
+          resolvedTrackablePlaces(
+            lastEvent
+          );
+
+        /*
+         * 2) If terminal message has no location, walk the
+         *    reply branch backwards and use the newest
+         *    resolved source reference.
+         */
+        if (!anchorPlaces.length) {
+          for (
+            let i = events.length - 2;
+            i >= 0;
+            i -= 1
+          ) {
+            anchorPlaces =
+              resolvedTrackablePlaces(
+                events[i]
+              );
+
+            if (anchorPlaces.length) {
+              break;
+            }
+          }
+        }
+
+        if (!anchorPlaces.length) {
+          return;
+        }
+
+        const anchor =
+          anchorPlaces[
+            anchorPlaces.length - 1
+          ];
+
+        terminal.last_place = {
+          ...anchor
+        };
+
+        terminal.drawable =
+          true;
+
+        terminal.position_ambiguous =
+          Boolean(
+            anchor.__monitor_anchor_kind ===
+              "midpoint" ||
+            anchor.__monitor_anchor_kind ===
+              "centroid"
+          );
+
+        terminal.__monitor_terminal_anchor_override =
+          true;
       });
+    });
 
     return payload;
   }
@@ -5275,11 +5379,37 @@ function updateThreatMarkerScale() {
 
 
   function endpointKey(endpoint) {
-    const place = endpoint && endpoint.place || {};
+    const place =
+      endpoint &&
+      endpoint.place ||
+      {};
+
+    const placeIdentity = [
+      place.id ||
+        place.place_id ||
+        place.canonical_name ||
+        place.raw_name ||
+        "",
+
+      Number.isFinite(Number(place.lat))
+        ? Number(place.lat).toFixed(6)
+        : "",
+
+      Number.isFinite(Number(place.lng))
+        ? Number(place.lng).toFixed(6)
+        : ""
+    ].join("@");
+
     return [
-      endpoint && endpoint.message_id || "",
-      place.id || "",
-      endpoint && endpoint.telegram_date || ""
+      endpoint &&
+        endpoint.message_id ||
+        "",
+
+      placeIdentity,
+
+      endpoint &&
+        endpoint.telegram_date ||
+        ""
     ].join("|");
   }
 
@@ -6428,6 +6558,168 @@ coreLine.addTo(
   }
 
 
+
+  /*
+   * MONITOR1654 AGGREGATE SNAPSHOT SEMANTICS
+   *
+   * Messages beginning with "Наразі N ..." are current
+   * situation snapshots. A newer aggregate snapshot of the
+   * same threat class supersedes older aggregate snapshots
+   * in LIVE rendering, while historical records remain in DB.
+   */
+  function isMonitorAggregateSnapshotTrack(track) {
+    if (
+      !track ||
+      track.__monitor1654 !== true
+    ) {
+      return false;
+    }
+
+    const events =
+      (
+        Array.isArray(track.segments)
+          ? track.segments
+          : []
+      ).flatMap(function(segment) {
+        return Array.isArray(segment.events)
+          ? segment.events
+          : [];
+      });
+
+    return events.some(function(event) {
+      const text =
+        String(
+          event &&
+          (
+            event.original_text ||
+            event.text
+          ) ||
+          ""
+        ).trim();
+
+      return /^наразі\s+\d+\s+/iu.test(text);
+    });
+  }
+
+
+  function aggregateSnapshotThreatKey(track) {
+    if (!track) {
+      return "unknown";
+    }
+
+    const threat =
+      (
+        Array.isArray(track.threats) &&
+        track.threats[0] &&
+        (
+          track.threats[0].id ||
+          track.threats[0].canonical_name
+        )
+      ) ||
+      track.threat ||
+      "unknown";
+
+    return String(threat);
+  }
+
+
+  function aggregateSnapshotUpdatedMs(track) {
+    const value =
+      track &&
+      (
+        track.updated_at ||
+        track.last_seen ||
+        track.started_at ||
+        track.first_seen
+      );
+
+    if (!value) {
+      return 0;
+    }
+
+    const ms = Date.parse(value);
+
+    return Number.isFinite(ms)
+      ? ms
+      : 0;
+  }
+
+
+  function suppressSupersededAggregateSnapshots(rows) {
+    const sourceRows =
+      Array.isArray(rows)
+        ? rows
+        : [];
+
+    const newestByThreat =
+      new Map();
+
+    sourceRows.forEach(function(row) {
+      const track = row && row.track;
+
+      if (
+        !isMonitorAggregateSnapshotTrack(
+          track
+        )
+      ) {
+        return;
+      }
+
+      const key =
+        aggregateSnapshotThreatKey(
+          track
+        );
+
+      const updatedMs =
+        aggregateSnapshotUpdatedMs(
+          track
+        );
+
+      const current =
+        newestByThreat.get(key);
+
+      if (
+        !current ||
+        updatedMs > current.updatedMs
+      ) {
+        newestByThreat.set(
+          key,
+          {
+            row: row,
+            updatedMs: updatedMs
+          }
+        );
+      }
+    });
+
+
+    return sourceRows.filter(function(row) {
+      const track = row && row.track;
+
+      if (
+        !isMonitorAggregateSnapshotTrack(
+          track
+        )
+      ) {
+        return true;
+      }
+
+      const key =
+        aggregateSnapshotThreatKey(
+          track
+        );
+
+      const newest =
+        newestByThreat.get(key);
+
+      return Boolean(
+        newest &&
+        newest.row === row
+      );
+    });
+  }
+
+
   function renderAirPayload(payload) {
     ensureAirLayers();
     clearAirLayers();
@@ -6457,13 +6749,19 @@ coreLine.addTo(
      * AND
      * meaningful source observation <= 30 minutes old.
      */
-    const activeRows =
+    const freshActiveRows =
       backendActiveRows.filter(
         function(row) {
           return isTrackFreshActive(
             row.track
           );
         }
+      );
+
+
+    const activeRows =
+      suppressSupersededAggregateSnapshots(
+        freshActiveRows
       );
 
 
@@ -6898,6 +7196,21 @@ coreLine.addTo(
           {};
 
 
+        const currentGroupCount =
+          Math.max(
+            1,
+            Number(
+              (
+                observation.place &&
+                observation.place.segment_object_count
+              ) ||
+              event.reported_object_count ||
+              event.object_count ||
+              1
+            ) || 1
+          );
+
+
         const marker =
           L.marker(
             observation.latlng,
@@ -6906,8 +7219,7 @@ coreLine.addTo(
                 createThreatIcon(
                   track,
                   true,
-                  event.reported_object_count ||
-                    1,
+                  currentGroupCount,
                   currentScreenOffset
                 ),
 
@@ -6931,8 +7243,7 @@ coreLine.addTo(
 
 
         marker.__airThreatCount =
-          event.reported_object_count ||
-          1;
+          currentGroupCount;
 
 
         marker.__airThreatOffset = {
