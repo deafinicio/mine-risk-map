@@ -647,11 +647,15 @@
     box-shadow: 0 0 8px rgba(53,230,255,.7);
     transition: width .25s linear;
   }
+/* Shared navigation to the reporting dashboard. */
+.dashboard-nav{position:fixed;top:10px;right:16px;z-index:1001;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid rgba(53,230,255,.4);border-radius:5px;background:#09202ef2;color:#a0f3ff;font:11px 'Share Tech Mono',sans-serif;text-decoration:none;box-shadow:0 0 16px #35e6ff15;transition:box-shadow .25s,background .25s}
+.dashboard-nav:hover{background:#123445;box-shadow:0 0 22px #35e6ff44}.dashboard-nav:focus-visible{outline:2px solid #35e6ff;outline-offset:3px}#top-bar{padding-right:152px}
 </style>
 </head>
 <body>
 
 <div id="hud-bg"></div>
+<a class="dashboard-nav" href="dashboard.html" aria-label="Перейти до дашборду">▦ Дашборд <span aria-hidden="true">↗</span></a>
 
 <div id="top-bar">
   <div class="brand">MINE RISK // TRACK SYS</div>

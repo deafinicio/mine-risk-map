@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="uk">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#060b14">
+  <meta name="description" content="Дашборд протимінної діяльності Харківської області. Охоплення, сесії та аудиторія за даними звітності 2026 року.">
+  <title>Огляд діяльності — EORE Analytics</title>
+  <link rel="icon" href="assets/favicon.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Orbitron:wght@500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="dashboard.css">
+  <script src="dashboard.js" defer></script>
+</head>
+<body>
+  <div class="ambient ambient-a" aria-hidden="true"></div><div class="ambient ambient-b" aria-hidden="true"></div>
+  <div class="grid-backdrop" aria-hidden="true"></div>
+  <a class="skip-link" href="#main">До показників</a>
+  <aside class="sidebar">
+    <a class="brand" href="dashboard.html" aria-label="EORE Analytics — головна"><span class="brand-mark" data-icon="compass"></span><span>EORE<span class="brand-sub">ANALYTICS</span></span></a>
+    <div class="sidebar-label">ПРОТИМІННА ДІЯЛЬНІСТЬ</div>
+    <nav class="nav" aria-label="Розділи аналітики">
+      <button class="nav-item active" data-view="overview" aria-current="page"><span data-icon="grid"></span>Огляд<span class="nav-dot"></span></button>
+      <button class="nav-item" data-view="audience"><span data-icon="people"></span>Аудиторія</button>
+      <button class="nav-item" data-view="sessions"><span data-icon="activity"></span>Сесії та освіта</button>
+      <button class="nav-item" data-view="team"><span data-icon="shield"></span>Команда</button>
+      <button class="nav-item" data-view="materials"><span data-icon="layers"></span>Матеріали</button>
+      <div class="nav-divider"></div>
+      <a class="nav-item map-link" href="index.html"><span data-icon="map"></span>Відкрити мапу<span data-icon="arrow-up-right"></span></a>
+    </nav>
+    <div class="sidebar-bottom"><div class="region-symbol" data-icon="radar"></div><div class="region-name">Харківська область</div><p>Люди. Знання. Безпека.</p><div class="data-badge"><span></span>Дані звітності · 2026</div></div>
+    <button class="sidebar-source" id="source-button"><span data-icon="info"></span>Про ці дані</button>
+  </aside>
+  <div class="workspace">
+    <header class="topbar"><div class="breadcrumb">Харківська область<span>/</span><strong id="breadcrumb-view">Огляд</strong></div><div class="top-actions"><span class="update-date"><span class="status-dot"></span>Оновлено 07.11.2026</span><button class="icon-button" id="motion-button" aria-label="Вимкнути анімації" title="Керування анімаціями" aria-pressed="false"><span data-icon="sparkles"></span></button><button class="export-button" id="export-button"><span data-icon="download"></span><span>Експорт CSV</span></button></div></header>
+    <main id="main">
+      <section class="page-heading"><div><div class="eyebrow"><span></span>ВІДДІЛ ПРОТИМІННОЇ ДІЯЛЬНОСТІ</div><h1 id="page-title">Огляд діяльності<span class="title-dot">.</span></h1><p id="page-description">Результати, аудиторія та динаміка нашої роботи.</p></div><div class="year-art" aria-hidden="true"><span class="year-ring"></span><span class="year-number">2026</span><span class="year-caption">KHARKIV REGION</span></div></section>
+      <section class="filter-bar glass" aria-label="Фільтри"><span class="filter-icon" data-icon="filter"></span><div class="filter-field"><label for="period">Звітний період</label><select id="period"><option value="all">Січень — жовтень 2026</option><optgroup label="Квартали"><option value="q1">I квартал</option><option value="q2">II квартал</option><option value="q3">III квартал</option></optgroup><optgroup label="Місяці" id="month-options"></optgroup></select></div><span class="filter-separator"></span><div class="filter-field"><label for="location">Команда / звітуюча локація</label><select id="location"><option value="all">Усі команди</option><option>Харків</option><option>Берестин</option><option>Лозова</option></select></div><button class="reset-button" id="reset-button" title="Скинути фільтри"><span data-icon="reset"></span><span>Скинути</span></button><div class="period-chip" id="period-chip">10 звітних місяців</div></section>
+      <div class="selection-summary" id="selection-summary" aria-live="polite"></div>
+      <div id="loading" class="loading-state"><span class="loader"></span>Завантажуємо показники…</div>
+      <div id="error" class="error-state" hidden><h2>Не вдалося завантажити показники</h2><p>Перевір з’єднання та спробуй ще раз.</p><button id="retry-button" class="export-button">Повторити</button></div>
+      <div id="dashboard-content" hidden>
+        <section class="kpi-grid" aria-label="Основні показники">
+          <article class="kpi glass accent-cyan"><div class="kpi-top"><span class="kpi-icon" data-icon="people"></span><button class="info-button" data-info="beneficiaries" aria-label="Як обліковуються бенефіціари">i</button></div><div class="kpi-value" data-metric="beneficiaries">0</div><h2>Унікальні бенефіціари</h2><div class="kpi-bottom"><span class="tiny-dot"></span><span id="beneficiaries-caption">За вибраний період</span></div><svg class="kpi-spark" id="spark-beneficiaries" aria-hidden="true" viewBox="0 0 100 35"></svg></article>
+          <article class="kpi glass accent-violet"><div class="kpi-top"><span class="kpi-icon" data-icon="activity"></span><button class="info-button" data-info="sessions" aria-label="Як обліковуються сесії">i</button></div><div class="kpi-value" data-metric="sessions">0</div><h2>Проведені сесії</h2><div class="kpi-bottom"><span class="tiny-dot"></span><span id="sessions-caption">Офлайн та онлайн</span></div><svg class="kpi-spark" id="spark-sessions" aria-hidden="true" viewBox="0 0 100 35"></svg></article>
+          <article class="kpi glass accent-mint"><div class="kpi-top"><span class="kpi-icon" data-icon="sun"></span><span class="kpi-tag">ДО 18 РОКІВ</span></div><div class="kpi-value" data-metric="children">0</div><h2>Діти та підлітки</h2><div class="kpi-bottom"><span class="tiny-dot"></span><span id="children-caption"></span></div><div class="kpi-mini-track"><span id="children-track"></span></div></article>
+          <article class="kpi glass accent-blue"><div class="kpi-top"><span class="kpi-icon" data-icon="person"></span><span class="kpi-tag">18 РОКІВ І СТАРШЕ</span></div><div class="kpi-value" data-metric="adults">0</div><h2>Дорослі</h2><div class="kpi-bottom"><span class="tiny-dot"></span><span id="adults-caption"></span></div><div class="kpi-mini-track"><span id="adults-track"></span></div></article>
+        </section>
+        <section class="view-section" id="view-overview">
+          <div class="primary-grid">
+            <article class="chart-panel glass"><div class="panel-heading"><div><span class="section-kicker">ДИНАМІКА</span><h2>Робота в цифрах</h2></div><div class="segmented" aria-label="Показник графіка"><button class="selected" data-chart="beneficiaries" aria-pressed="true">Бенефіціари</button><button data-chart="sessions" aria-pressed="false">Сесії</button></div></div><div class="chart-headline"><strong id="chart-headline">6 985</strong><span id="chart-unit">бенефіціарів за період</span><span class="chart-legend"><i></i><span id="chart-legend">Охоплення</span></span></div><div class="timeline-container"><svg id="timeline" viewBox="0 0 780 242" role="group" aria-label="Динаміка охоплення за місяцями"></svg><div id="chart-tooltip" class="chart-tooltip" hidden></div></div><div class="month-buttons" id="month-buttons" aria-label="Вибрати місяць"></div><div class="chart-footnote"><span data-icon="cursor"></span>Натисни на місяць, щоб переглянути його показники<button id="all-period-button">Увесь період <span>↗</span></button></div></article>
+            <article class="audience-panel glass"><div class="panel-heading"><div><span class="section-kicker">АУДИТОРІЯ</span><h2>Статевий розподіл</h2></div><span class="subtle-icon" data-icon="people"></span></div><div class="donut-wrap"><svg class="donut" viewBox="0 0 220 220" role="img" aria-label="Розподіл бенефіціарів за статтю"><circle class="donut-base" cx="110" cy="110" r="84"></circle><circle id="donut-male" cx="110" cy="110" r="84"></circle><circle id="donut-female" cx="110" cy="110" r="84"></circle><circle class="donut-inner" cx="110" cy="110" r="67"></circle></svg><div class="donut-label"><span>Усього</span><strong id="donut-total">6 985</strong><small>бенефіціарів</small></div></div><div class="gender-legend"><div><span class="legend-name"><i class="female-color"></i>Жінки та дівчата</span><strong id="female-total"></strong><span id="female-share"></span></div><div><span class="legend-name"><i class="male-color"></i>Чоловіки та хлопці</span><strong id="male-total"></strong><span id="male-share"></span></div></div></article>
+          </div>
+          <div class="secondary-grid"><article class="age-panel glass"><div class="panel-heading"><div><span class="section-kicker">ВІКОВІ ГРУПИ</span><h2>Кого ми охоплюємо</h2></div><span class="panel-meta">Кількість людей</span></div><div id="age-bars" class="age-bars"></div><div class="age-foot"><span><i></i>До 18 років</span><span><i></i>Дорослі</span><button data-open-view="audience">Детальніше <span>↗</span></button></div></article><article class="reach-panel glass"><div class="panel-heading"><div><span class="section-kicker">ДОДАТКОВІ КАТЕГОРІЇ</span><h2>Охоплення та доступність</h2></div></div><div class="reach-row"><span class="reach-icon" data-icon="home"></span><div><span>Внутрішньо переміщені особи</span><small>За даними звітності</small></div><strong id="idp-total"></strong></div><div class="reach-row"><span class="reach-icon violet" data-icon="accessibility"></span><div><span>Особи з інвалідністю</span><small>За даними звітності</small></div><strong id="disability-total"></strong></div><div class="reach-note"><span data-icon="info"></span>Категорії можуть перетинатися</div></article></div>
+          <div class="insight-strip glass"><div class="insight-icon" data-icon="sparkles"></div><div><span>ФОКУС ПЕРІОДУ</span><p id="insight-text"></p></div><a href="index.html" class="map-link">Подивитися на мапі <span data-icon="arrow-up-right"></span></a></div>
+        </section>
+        <section class="view-section" id="view-audience" hidden><article class="glass detail-panel"><div class="panel-heading"><div><span class="section-kicker">ВІК ТА СТАТЬ</span><h2>Склад аудиторії</h2></div><button class="text-button" data-open-view="overview">До огляду ↗</button></div><div class="table-scroll"><table><thead><tr><th>Вікова група</th><th>Чоловіча стать</th><th>Жіноча стать</th><th>Разом</th><th>Частка</th></tr></thead><tbody id="audience-table"></tbody></table></div></article><div class="detail-cards" id="audience-details"></div></section>
+        <section class="view-section" id="view-sessions" hidden><div class="detail-cards" id="session-details"></div><article class="glass detail-panel"><span class="section-kicker">ЗАКЛАДИ ОСВІТИ</span><h2>Інформування в освітньому середовищі</h2><div class="education-grid" id="education-details"></div><p class="detail-note">Показники освіти наведено окремо. Вони не додаються повторно до загального охоплення.</p></article></section>
+        <section class="view-section" id="view-team" hidden><article class="glass detail-panel"><span class="section-kicker">БРИФІНГИ</span><h2>Працівники та волонтери</h2><div class="education-grid" id="team-details"></div><p class="detail-note">Кадрова чисельність у джерелі заповнена частково. Річну кількість унікальних інструкторів за цими записами не визначено.</p></article><article class="glass detail-panel"><h2>Облік спільних сесій</h2><p class="detail-copy">У цьому огляді кожна сесія враховується один раз. Якщо її проводять двоє інструкторів, кількість сесій і бенефіціарів у підсумку не подвоюється.</p></article></section>
+        <section class="view-section" id="view-materials" hidden><div class="detail-cards" id="material-details"></div><article class="glass detail-panel"><h2>Матеріали за даними звітності</h2><p class="detail-copy">Назви відповідають колонкам вихідної таблиці. «Листівки» та «Обстріли» наведені окремо: без уточнення класифікації їх не складаємо в один загальний тираж.</p></article></section>
+        <footer class="dashboard-footer"><span><i></i>Джерело: загальна статистика RASB, 2026</span><span>Дані за січень–жовтень <span class="footer-sep">/</span> EORE Analytics</span></footer>
+      </div>
+    </main>
+  </div>
+  <dialog id="info-dialog"><button class="dialog-close icon-button" aria-label="Закрити довідку"><span data-icon="close"></span></button><span class="section-kicker">ПРО ПОКАЗНИК</span><h2 id="dialog-title"></h2><p id="dialog-text"></p><button class="export-button dialog-confirm">Зрозуміло</button></dialog>
+  <div id="toast" class="toast" role="status" hidden></div>
+</body>
+</html>
