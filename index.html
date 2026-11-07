@@ -650,27 +650,30 @@
 /* Shared navigation to the reporting dashboard. */
 .dashboard-nav{position:fixed;top:10px;right:16px;z-index:1001;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid rgba(53,230,255,.4);border-radius:5px;background:#09202ef2;color:#a0f3ff;font:11px 'Share Tech Mono',sans-serif;text-decoration:none;box-shadow:0 0 16px #35e6ff15;transition:box-shadow .25s,background .25s}
 .dashboard-nav:hover{background:#123445;box-shadow:0 0 22px #35e6ff44}.dashboard-nav:focus-visible{outline:2px solid #35e6ff;outline-offset:3px}#top-bar{padding-right:152px}
+#top-bar{gap:16px}#top-bar .hud-stat{flex:none}#top-bar .hud-stat span{letter-spacing:.6px}#top-bar .brand{font-size:14px;letter-spacing:1px}
+@media(max-width:1050px){#top-bar{gap:12px}#top-bar .hud-stat:has(#hud-clock),#top-bar .hud-stat:has(#hud-date){display:none}#top-bar .hud-sep{display:none}}
+@media(max-width:720px){#top-bar{height:98px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 12px;overflow:hidden}#top-bar .brand{grid-column:1/-1;font-size:12px;align-self:start;padding-right:125px}#top-bar .status-tag{display:none}#top-bar .spacer{display:none}#top-bar .hud-stat{align-self:end}#top-bar .hud-stat span{font-size:8px;letter-spacing:0;white-space:normal;line-height:1.3}#top-bar .hud-stat b{font-size:15px}.dashboard-nav{top:7px;right:10px;padding:7px 9px}#map{top:98px;height:calc(100% - 98px)}}
 </style>
 </head>
-<body>
+<body data-map-mode="mine">
 
 <div id="hud-bg"></div>
 <a class="dashboard-nav" href="dashboard.html" aria-label="Перейти до дашборду">▦ Дашборд <span aria-hidden="true">↗</span></a>
 
 <div id="top-bar">
-  <div class="brand">MINE RISK // TRACK SYS</div>
+  <div class="brand">EORE // СЕСІЇ</div>
   <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-clock">--:--:--</b><span>local time</span></div>
+  <div class="hud-stat"><b id="hud-clock">--:--:--</b><span>місцевий час</span></div>
   <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-date">----</b><span>date</span></div>
+  <div class="hud-stat"><b id="hud-date">----</b><span>дата</span></div>
   <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-total">0</b><span>sessions total</span></div>
+  <div class="hud-stat"><b id="hud-total">0</b><span>усього сесій</span></div>
   <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-shown">0</b><span>shown on map</span></div>
+  <div class="hud-stat"><b id="hud-shown">0</b><span>сесій за фільтрами</span></div>
   <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-participants">0</b><span>participants</span></div>
+  <div class="hud-stat"><b id="hud-participants">0</b><span>учасників за фільтрами</span></div>
   <div class="spacer"></div>
-  <div class="status-tag" id="hud-live">● LIVE FEED</div>
+  <div class="status-tag" id="hud-live" role="status">● ЗАВАНТАЖЕННЯ</div>
 </div>
 
 <div id="map"></div>
@@ -695,7 +698,7 @@
 
 <div id="boot-sequence">
   <div class="boot-inner">
-    <div class="boot-title">MINE RISK // TRACK SYS</div>
+    <div class="boot-title">EORE // СЕСІЇ</div>
     <div class="boot-line" id="boot-line-1"></div>
     <div class="boot-line" id="boot-line-2"></div>
     <div class="boot-line" id="boot-line-3"></div>
@@ -706,7 +709,7 @@
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
-<script src="https://leaflet.github.io/Leaflet.heat/dist/leaflet-heat.js"></script>
+<script src="assets/vendor/leaflet-heat-0.2.0.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <script>
@@ -793,7 +796,28 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 
+// Each mode owns the shared HUD. Late session responses must not overwrite AIR.
+var sessionsFeedState = { text: "● ЗАВАНТАЖЕННЯ", color: "var(--amber)", title: "" };
+
+function setSessionsFeedState(text, color, title) {
+  sessionsFeedState = { text: text, color: color || "", title: title || "" };
+  updateHudStats();
+}
+
 function updateHudStats() {
+  if (document.body.dataset.mapMode === "air") return;
+  document.querySelector("#top-bar .brand").textContent = "EORE // СЕСІЇ";
+  const labels = { "hud-total": "усього сесій", "hud-shown": "сесій за фільтрами", "hud-participants": "учасників за фільтрами" };
+  Object.keys(labels).forEach(function(id) {
+    const el = document.getElementById(id);
+    if (el) el.parentElement.querySelector("span").textContent = labels[id];
+  });
+  const live = document.getElementById("hud-live");
+  if (live) {
+    live.textContent = sessionsFeedState.text;
+    live.style.color = sessionsFeedState.color;
+    live.title = sessionsFeedState.title;
+  }
   const totalEl = document.getElementById("hud-total");
   const shownEl = document.getElementById("hud-shown");
   const participantsEl = document.getElementById("hud-participants");
@@ -1217,9 +1241,8 @@ function applyFilters() {
 }
 
 async function loadLiveSessions() {
-  var liveTag = document.getElementById("hud-live");
   try {
-    if (liveTag) { liveTag.textContent = "● SYNCING"; liveTag.style.color = "var(--amber)"; }
+    setSessionsFeedState("● ОНОВЛЕННЯ", "var(--amber)");
 
     const [settlementsResponse, sessionsResponse] = await Promise.all([
       fetch(SETTLEMENTS_GEOJSON_URL + "?nocache=" + Date.now()),
@@ -1242,10 +1265,10 @@ async function loadLiveSessions() {
     buildLayers(allSessions);
     populateFilterOptions(allSessions);
 
-    if (liveTag) { liveTag.textContent = "● LIVE FEED"; liveTag.style.color = ""; }
+    setSessionsFeedState("● ДАНІ СЕСІЙ", "", "Джерело: реєстр проведених сесій. Показники враховують сесії з координатами на мапі.");
   } catch (error) {
     console.error(error);
-    if (liveTag) { liveTag.textContent = "● FEED ERROR"; liveTag.style.color = "var(--red)"; }
+    setSessionsFeedState("● ПОМИЛКА ДАНИХ", "var(--red)", "Не вдалося оновити реєстр сесій. Повторіть завантаження.");
   }
 }
 
@@ -1534,7 +1557,7 @@ heatProxy.on("remove", function() {
 
 var overlays = {
   "Кластер точок": clusterLayer,
-  "Heatmap всієї області": heatProxy
+  "Теплова карта охоплення": heatProxy
 };
 
 L.control.layers(baseLayers, overlays, { collapsed: false }).addTo(map);
@@ -1599,6 +1622,6 @@ async function runBootSequence(dataPromise) {
 var sessionsLoadPromise = loadLiveSessions();
 runBootSequence(sessionsLoadPromise);
 </script>
-<script src="air-mode.js"></script>
+<script src="air-mode.js?v=20261108-session-hud"></script>
 </body>
 </html>

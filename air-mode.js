@@ -4060,18 +4060,10 @@ function updateThreatMarkerScale() {
     if (filters) filters.style.display = minePanelState.filtersDisplay;
     if (heatPanel) heatPanel.style.display = minePanelState.heatSettingsDisplay;
 
-    setText("#top-bar .brand", "MINE RISK // TRACK SYS");
-
     if (typeof updateHudStats === "function") {
       updateHudStats();
     }
 
-    const live = $("hud-live");
-    if (live) {
-      live.textContent = "● LIVE FEED";
-      live.style.color = "";
-      live.title = "";
-    }
   }
 
   function isTrackActive(track) {
@@ -7961,6 +7953,7 @@ coreLine.addTo(
 
 
   function renderAirHud(stats) {
+    if (mode !== "air") return;
     setText("#top-bar .brand", "AIR THREAT // TRACK SYS");
     setHudStat("hud-total", stats.loadedTracks, "tracks loaded");
     setHudStat("hud-shown", stats.activeTracks, "active tracks");
@@ -8493,7 +8486,7 @@ coreLine.addTo(
       const stats = renderAirPayload(payload);
       renderAirHud(stats);
     } catch (error) {
-      if (error && error.name === "AbortError") return;
+      if (mode !== "air" || (error && error.name === "AbortError")) return;
 
       console.error("AIR mode load failed:", error);
 
@@ -8541,6 +8534,8 @@ coreLine.addTo(
     hideMineUi();
 
     mode = "air";
+    document.body.dataset.mapMode = "air";
+    if ($("hud-live")) $("hud-live").title = "";
     lastPayload = null;
 
     installAirTrackModeButton();
@@ -8609,6 +8604,7 @@ coreLine.addTo(
     if (mode !== "air") return;
 
     mode = "mine";
+    document.body.dataset.mapMode = "mine";
     stopRefreshLoop();
 
     selectedAirTrackId =
