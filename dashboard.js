@@ -150,6 +150,7 @@ function renderDetails(total, rows) {
   const incompleteBriefings = state.location === 'Харків' && rows.some(row => row.index === 6);
   $('#team-details').innerHTML = (incompleteBriefings ? '<div><strong>—</strong><span>Кількість брифінгів: за червень не заповнено первинне поле</span></div>' : educationCell(total.briefings, 'Проведені брифінги')) + educationCell(total.employees, 'Участі працівників у брифінгах') + educationCell(total.volunteers, 'Участі волонтерів у брифінгах');
   $('#material-details').innerHTML = detailCard('Листівки', number(total.leaflets), 'Колонка Q звітної таблиці') + detailCard('Плакати', number(total.posters), 'Внесені показники колонки R') + detailCard('Матеріали «Обстріли»', number(total.shelling), 'Окремий показник колонки S');
+  VisualCharts.render({ total, rows, allRows: state.data.months.map(scopedRow), selectedMonths: periodMonths(), location: state.location, ageLabels: state.data.ageLabels });
 }
 function render() {
   if (!state.data) return;
@@ -187,6 +188,7 @@ function setView(view) {
   if (!Object.hasOwn(viewNames, view)) return;
   const update = () => {
     state.view = view;
+    $('.kpi-grid').hidden = view !== 'overview';
     $$('.view-section').forEach(section => { section.hidden = section.id !== `view-${view}`; });
     $$('.nav-item[data-view]').forEach(button => { const current = button.dataset.view === view; button.classList.toggle('active', current); if (current) button.setAttribute('aria-current', 'page'); else button.removeAttribute('aria-current'); });
     $('#page-title').innerHTML = `${viewNames[view]}<span class="title-dot">.</span>`;
@@ -228,6 +230,10 @@ document.addEventListener('click', event => {
   const help = event.target.closest('[data-info]'); if (help) showInfo(help.dataset.info);
 });
 $('#period').addEventListener('change', event => changeSelection(event.target.value));
+document.addEventListener('keydown', event => {
+  const month = event.target.closest('.v-month[data-month]');
+  if (month && state.data && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); changeSelection(`m${month.dataset.month}`); }
+});
 $('#location').addEventListener('change', event => changeSelection(state.period, event.target.value));
 $('#reset-button').addEventListener('click', () => { if (state.data) changeSelection('all', 'all'); });
 $('#all-period-button').addEventListener('click', () => changeSelection('all'));
