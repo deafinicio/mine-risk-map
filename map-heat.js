@@ -46,6 +46,7 @@
   const GPUHeat = L.Layer.extend({
     initialize(points, options) { L.setOptions(this,options); this._latlngs=points; this._motion=!matchMedia('(prefers-reduced-motion: reduce)').matches && document.documentElement.dataset.motion!=='off'; this._frame=null; },
     onAdd(map) {
+      this._motion=document.documentElement.dataset.motion!=='off' && !matchMedia('(prefers-reduced-motion: reduce)').matches;
       this._map=map;
       this._canvas=L.DomUtil.create('canvas','leaflet-heatmap-layer leaflet-layer eore-gpu-heat leaflet-zoom-animated');
       this._canvas.style.pointerEvents='none'; this._canvas.setAttribute('aria-hidden','true');
