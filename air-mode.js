@@ -8567,6 +8567,9 @@ coreLine.addTo(
 
     await ensureAirRingRoadLoaded();
 
+    // The user may return to sessions while the road overlay is loading.
+    if (mode !== "air") return;
+
     ensureAirVisualSettingsPanel();
     setAirVisualPanelVisible(false);
 
