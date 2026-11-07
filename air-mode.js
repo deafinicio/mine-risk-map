@@ -1275,7 +1275,7 @@ function rerenderAirVisuals() {
 
     airVisualSettingsControl =
       L.control({
-        position: "topleft"
+        position: "topright"
       });
 
 
@@ -1299,11 +1299,11 @@ function rerenderAirVisuals() {
 
         div.innerHTML = `
           <div class="section-title">
-            Air Visual Params
+            Світло та повітряні загрози
           </div>
 
           <label class="small-label">
-            Icon glow
+            Світіння маркерів
             <span id="air-icon-glow-value"></span>
           </label>
 
@@ -1317,7 +1317,7 @@ function rerenderAirVisuals() {
 
 
           <label class="small-label">
-            Glow radius
+            Радіус світіння
             <span id="air-glow-radius-value"></span>
           </label>
 
@@ -1331,7 +1331,7 @@ function rerenderAirVisuals() {
 
 
           <label class="small-label">
-            Pulse
+            Пульсація
             <span id="air-pulse-value"></span>
           </label>
 
@@ -1345,7 +1345,7 @@ function rerenderAirVisuals() {
 
 
           <label class="small-label">
-            Track glow
+            Світіння треків
             <span id="air-track-glow-value"></span>
           </label>
 
@@ -1359,7 +1359,7 @@ function rerenderAirVisuals() {
 
 
           <label class="small-label">
-            Track width
+            Товщина треків
             <span id="air-track-width-value"></span>
           </label>
 
@@ -1373,7 +1373,7 @@ function rerenderAirVisuals() {
 
 
           <label class="small-label">
-            Kharkiv boundary
+            Контур Харкова
             <span id="air-ring-road-intensity-value"></span>
           </label>
 
@@ -7954,13 +7954,13 @@ coreLine.addTo(
 
   function renderAirHud(stats) {
     if (mode !== "air") return;
-    setText("#top-bar .brand", "AIR THREAT // TRACK SYS");
-    setHudStat("hud-total", stats.loadedTracks, "tracks loaded");
-    setHudStat("hud-shown", stats.activeTracks, "active tracks");
+    setText("#top-bar .brand", "Повітряні загрози");
+    setHudStat("hud-total", stats.loadedTracks, "треків завантажено");
+    setHudStat("hud-shown", stats.activeTracks, "активних треків");
     setHudStat(
       "hud-participants",
       stats.markers,
-      "mapped positions"
+      "позицій на мапі"
     );
 
     const live = $("hud-live");
@@ -8500,9 +8500,9 @@ coreLine.addTo(
       }
 
       if (!lastPayload) {
-        setHudStat("hud-total", "ERR", "tracks loaded");
-        setHudStat("hud-shown", "—", "active tracks");
-        setHudStat("hud-participants", "—", "mapped positions");
+        setHudStat("hud-total", "ERR", "треків завантажено");
+        setHudStat("hud-shown", "—", "активних треків");
+        setHudStat("hud-participants", "—", "позицій на мапі");
       }
     } finally {
       activeRequest = null;
@@ -8591,10 +8591,10 @@ coreLine.addTo(
       button.style.color = "var(--amber)";
     }
 
-    setText("#top-bar .brand", "AIR THREAT // TRACK SYS");
-    setHudStat("hud-total", "…", "tracks loaded");
-    setHudStat("hud-shown", "…", "active tracks");
-    setHudStat("hud-participants", "…", "mapped positions");
+    setText("#top-bar .brand", "Повітряні загрози");
+    setHudStat("hud-total", "…", "треків завантажено");
+    setHudStat("hud-shown", "…", "активних треків");
+    setHudStat("hud-participants", "…", "позицій на мапі");
 
     await loadAirTracks();
 

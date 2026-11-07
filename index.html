@@ -12,7 +12,6 @@
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 
 <!-- Basic SEO -->
 <meta name="description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
@@ -35,681 +34,39 @@
 <meta name="twitter:description" content="Інтерактивна карта сесій інформування населення щодо ризиків вибухонебезпечних предметів у Харківській області." />
 <meta name="twitter:image" content="https://deafinicio.github.io/mine-risk-map/assets/preview-map.jpg" />
 
-<style>
-  :root{
-    --bg:            #030a10;
-    --bg-deep:       #010509;
-    --panel:         rgba(5, 18, 26, .90);
-    --panel-soft:    rgba(5, 18, 26, .72);
-    --line:          rgba(51, 226, 255, .16);
-    --grid:          rgba(51, 226, 255, .05);
-    --cyan:          #35e6ff;
-    --cyan-dim:      #1c7f96;
-    --cyan-soft:     rgba(53, 230, 255, .12);
-    --green:         #4dffb0;
-    --amber:         #ffcc4d;
-    --red:           #ff5b5b;
-    --text:          #d6f6ff;
-    --text-dim:      #6f95a3;
-    --font-display:  'Orbitron', sans-serif;
-    --font-mono:     'Share Tech Mono', monospace;
-  }
-
-  *{ box-sizing:border-box; }
-
-  html, body {
-    height: 100%;
-    margin: 0;
-    background: var(--bg);
-    font-family: var(--font-mono);
-    color: var(--text);
-  }
-
-  #map {
-    position: absolute;
-    inset: 0;
-    top: 52px;
-    height: calc(100% - 52px);
-    background: var(--bg-deep);
-  }
-
-  /* ---------- ambient HUD chrome ---------- */
-
-  #hud-bg{
-    position:fixed; inset:0; z-index:0; pointer-events:none;
-    background-image:
-      linear-gradient(var(--grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-    background-size: 46px 46px;
-  }
-
-  #hud-scan{
-    position:fixed; inset:0; z-index:1000; pointer-events:none;
-    background: repeating-linear-gradient(
-      to bottom,
-      rgba(255,255,255,0.018) 0px,
-      rgba(255,255,255,0.018) 1px,
-      transparent 1px,
-      transparent 3px
-    );
-    mix-blend-mode: overlay;
-  }
-
-  #hud-vignette{
-    position:fixed; inset:0; z-index:999; pointer-events:none;
-    box-shadow: inset 0 0 160px rgba(0,0,0,.75);
-  }
-
-  /* ---------- top bar ---------- */
-
-  #top-bar{
-    position:relative; z-index:600;
-    height:52px;
-    display:flex;
-    align-items:center;
-    gap:22px;
-    padding:0 16px;
-    background: linear-gradient(180deg, #06131a 0%, #030a10 100%);
-    border-bottom:1px solid var(--line);
-    box-shadow: 0 1px 18px rgba(53,230,255,.10);
-    font-family: var(--font-mono);
-    white-space:nowrap;
-    overflow:hidden;
-  }
-
-  #top-bar .brand{
-    font-family: var(--font-display);
-    font-weight:900;
-    letter-spacing:2px;
-    font-size:15px;
-    color: var(--cyan);
-    text-shadow: 0 0 10px rgba(53,230,255,.65);
-    display:flex;
-    align-items:center;
-    gap:8px;
-  }
-
-  #top-bar .brand::before{
-    content:"";
-    width:9px; height:9px;
-    background: var(--green);
-    border-radius:50%;
-    box-shadow:0 0 8px var(--green);
-    animation: blink 1.6s infinite;
-  }
-
-  @keyframes blink{
-    0%,100%{ opacity:1; }
-    50%{ opacity:.25; }
-  }
-
-  .hud-stat{
-    display:flex;
-    flex-direction:column;
-    line-height:1.15;
-    font-size:11px;
-  }
-  .hud-stat b{
-    font-size:12.5px;
-    color:var(--text);
-    letter-spacing:.5px;
-  }
-  .hud-stat span{
-    color:var(--text-dim);
-    font-size:9.5px;
-    letter-spacing:1.5px;
-    text-transform:uppercase;
-  }
-
-  .hud-sep{
-    width:1px; height:26px;
-    background:var(--line);
-    flex:none;
-  }
-
-  #top-bar .spacer{ flex:1; }
-
-  #top-bar .status-tag{
-    font-size:9.5px;
-    letter-spacing:2px;
-    color: var(--green);
-    border:1px solid rgba(77,255,176,.4);
-    padding:3px 8px;
-    text-transform:uppercase;
-    background: rgba(77,255,176,.06);
-  }
-
-  /* ---------- panels (angular HUD frame) ---------- */
-
-  .control-box, .icon-control{
-    background: var(--panel);
-    border: 1px solid var(--line);
-    color: var(--text);
-    font-family: var(--font-mono);
-    font-size: 12px;
-    clip-path: polygon(0 10px, 10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%);
-    box-shadow: 0 0 0 1px rgba(53,230,255,.05), 0 8px 24px rgba(0,0,0,.55), 0 0 18px rgba(53,230,255,.08);
-    position: relative;
-  }
-
-  .control-box::before, .icon-control::before{
-    content:"";
-    position:absolute; left:0; right:0; top:0;
-    height:2px;
-    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-    opacity:.7;
-  }
-
-  .control-box{
-    padding: 12px 14px 10px;
-  }
-
-  .control-box .section-title{
-    font-family: var(--font-display);
-    font-weight:700;
-    font-size: 11px;
-    letter-spacing: 2px;
-    text-transform: uppercase;
-    color: var(--cyan);
-    margin: 0 0 10px;
-    padding-bottom:6px;
-    border-bottom: 1px solid var(--line);
-    display:flex;
-    align-items:center;
-    gap:6px;
-  }
-  .control-box .section-title::before{
-    content:"//";
-    color: var(--text-dim);
-  }
-
-  .control-box input,
-  .control-box select,
-  .control-box button,
-  .control-box label {
-    display: block;
-    width: 100%;
-    margin-bottom: 8px;
-    box-sizing: border-box;
-    font-family: var(--font-mono);
-  }
-
-  .control-box label{
-    font-size:9.5px;
-    letter-spacing:1.2px;
-    text-transform:uppercase;
-    color: var(--text-dim);
-    margin-bottom:4px;
-  }
-
-  .control-box input,
-  .control-box select,
-  .control-box button {
-    padding: 7px 8px;
-    border: 1px solid var(--cyan-dim);
-    border-radius: 2px;
-    background: rgba(0,10,16,.55);
-    color: var(--text);
-    font-size:12.5px;
-  }
-
-  .control-box select{
-    appearance:none;
-    background-image: linear-gradient(45deg, transparent 50%, var(--cyan) 50%), linear-gradient(135deg, var(--cyan) 50%, transparent 50%);
-    background-position: calc(100% - 14px) center, calc(100% - 9px) center;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-  }
-
-  .control-box input::placeholder{ color: var(--text-dim); }
-
-  .control-box input:focus,
-  .control-box select:focus{
-    outline:none;
-    border-color: var(--cyan);
-    box-shadow: 0 0 0 1px var(--cyan), 0 0 10px rgba(53,230,255,.45);
-  }
-
-  .control-box button{
-    cursor:pointer;
-    color: var(--cyan);
-    letter-spacing:1.5px;
-    text-transform:uppercase;
-    font-size:10.5px;
-    font-weight:700;
-    border-color: var(--cyan-dim);
-    transition: all .15s ease;
-  }
-  .control-box button:hover{
-    background: var(--cyan-soft);
-    border-color: var(--cyan);
-    box-shadow: 0 0 12px rgba(53,230,255,.35);
-  }
-  .control-box button:active{ transform: translateY(1px); }
-
-  #filter-btn{ color: var(--bg); background: var(--cyan); border-color: var(--cyan); }
-  #filter-btn:hover{ background: #7cf1ff; }
-
-  .control-box input[type="range"] {
-    padding: 0;
-    border: 0;
-    margin-bottom: 12px;
-    -webkit-appearance:none;
-    height:4px;
-    background: linear-gradient(90deg, var(--cyan-dim), var(--line));
-    border-radius:2px;
-  }
-  .control-box input[type="range"]::-webkit-slider-thumb{
-    -webkit-appearance:none;
-    width:13px; height:13px;
-    border-radius:50%;
-    background: var(--cyan);
-    box-shadow: 0 0 8px rgba(53,230,255,.9);
-    cursor:pointer;
-    margin-top:-4.5px;
-  }
-
-  .control-box .small-label{
-    font-size: 10px;
-    letter-spacing:1px;
-    text-transform:uppercase;
-    color: var(--text-dim);
-    margin-bottom: 4px;
-    display:flex;
-    justify-content:space-between;
-  }
-  .control-box .small-label span{ color: var(--cyan); }
-
-  .icon-control {
-    overflow: hidden;
-    display:flex;
-    flex-direction:column;
-  }
-
-  .icon-control button {
-    width: 46px;
-    height: 38px;
-    border: 0;
-    border-bottom: 1px solid var(--line);
-    background: transparent;
-    cursor: pointer;
-    font-size: 9.5px;
-    letter-spacing:1px;
-    font-weight:700;
-    color: var(--cyan);
-    line-height: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    transition: all .15s ease;
-  }
-  .icon-control button:last-child{ border-bottom:0; }
-
-  .icon-control button:hover {
-    background: var(--cyan-soft);
-    box-shadow: inset 0 0 12px rgba(53,230,255,.35);
-  }
-
-  .filter-panel-hidden {
-    display: none;
-  }
-
-  .export-status {
-    margin-top: 6px;
-    font-size: 10px;
-    letter-spacing:.5px;
-    color: var(--green);
-    min-height: 12px;
-  }
-
-  /* ---------- coordinate readout ---------- */
-
-  #coord-readout{
-    position:absolute;
-    left:14px; bottom:14px;
-    z-index:500;
-    font-family: var(--font-mono);
-    font-size: 11px;
-    color: var(--cyan);
-    background: var(--panel-soft);
-    border:1px solid var(--line);
-    padding:6px 10px;
-    letter-spacing:1px;
-    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
-    pointer-events:none;
-  }
-  #coord-readout .lbl{ color: var(--text-dim); margin-right:6px; }
-
-  /* ---------- radar decoration ---------- */
-
-  #radar{
-    position:absolute;
-    left:14px; bottom:52px;
-    z-index:500;
-    width:74px; height:74px;
-    border-radius:50%;
-    border:1px solid var(--line);
-    background: radial-gradient(circle, rgba(53,230,255,.06) 0%, rgba(0,0,0,.4) 100%);
-    pointer-events:none;
-    overflow:hidden;
-  }
-  #radar::before{
-    content:"";
-    position:absolute; inset:0;
-    background: conic-gradient(from 0deg, rgba(53,230,255,.55), transparent 28%, transparent 100%);
-    animation: sweep 3.2s linear infinite;
-  }
-  #radar::after{
-    content:"";
-    position:absolute; inset:8px;
-    border-radius:50%;
-    border:1px solid rgba(53,230,255,.18);
-  }
-  @keyframes sweep{ to{ transform: rotate(360deg); } }
-  #radar span{
-    position:absolute; bottom:3px; left:0; right:0;
-    text-align:center;
-    font-size:7.5px;
-    letter-spacing:1.5px;
-    color: var(--text-dim);
-  }
-
-  /* ---------- leaflet overrides ---------- */
-
-  .leaflet-container{
-    background: var(--bg-deep);
-    font-family: var(--font-mono);
-  }
-
-  .leaflet-control-zoom a{
-    background: var(--panel) !important;
-    color: var(--cyan) !important;
-    border: 1px solid var(--line) !important;
-  }
-  .leaflet-control-zoom a:hover{
-    background: var(--cyan-soft) !important;
-  }
-
-  .leaflet-control-layers{
-    background: var(--panel) !important;
-    color: var(--text) !important;
-    border: 1px solid var(--line) !important;
-    font-family: var(--font-mono);
-    font-size: 12px;
-    box-shadow: 0 0 18px rgba(53,230,255,.08);
-  }
-  .leaflet-control-layers-separator{ border-color: var(--line) !important; }
-
-  .leaflet-popup-content-wrapper{
-    background: var(--panel);
-    color: var(--text);
-    border: 1px solid var(--line);
-    border-radius: 2px;
-    font-family: var(--font-mono);
-    box-shadow: 0 0 20px rgba(53,230,255,.18);
-  }
-  .leaflet-popup-content{ font-size:12.5px; line-height:1.5; }
-  .leaflet-popup-content b{ color: var(--cyan); }
-  .leaflet-popup-tip{ background: var(--panel); border:1px solid var(--line); }
-  .leaflet-popup-close-button{ color: var(--cyan) !important; }
-
-  .leaflet-bar{ border: none !important; }
-
-  .leaflet-control-attribution{
-    background: rgba(3,10,16,.7) !important;
-    color: var(--text-dim) !important;
-    font-family: var(--font-mono);
-    font-size:10px;
-  }
-  .leaflet-control-attribution a{ color: var(--cyan-dim) !important; }
-
-  .marker-cluster-small, .marker-cluster-medium, .marker-cluster-large{
-    background: rgba(53,230,255,.15) !important;
-  }
-  .marker-cluster-small div, .marker-cluster-medium div, .marker-cluster-large div{
-    background: rgba(3,15,20,.85) !important;
-    color: var(--cyan) !important;
-    border: 1px solid var(--cyan) !important;
-    box-shadow: 0 0 10px rgba(53,230,255,.5);
-    font-family: var(--font-mono);
-    font-weight:700;
-  }
-
-  .hud-marker{
-    width:14px; height:14px;
-    border-radius:50%;
-    background: radial-gradient(circle, rgba(53,230,255,.9) 0%, rgba(53,230,255,.15) 70%);
-    border: 1px solid var(--cyan);
-    box-shadow: 0 0 8px rgba(53,230,255,.9);
-    position:relative;
-  }
-  .hud-marker::after{
-    content:"";
-    position:absolute; inset:-6px;
-    border-radius:50%;
-    border:1px solid rgba(53,230,255,.35);
-    animation: pulse-ring 2.2s ease-out infinite;
-  }
-  @keyframes pulse-ring{
-    0%{ transform:scale(.4); opacity:.9; }
-    100%{ transform:scale(1.8); opacity:0; }
-  }
-
-  /* ---------- crosshair cursor over the map ---------- */
-
-  .leaflet-container{
-    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24"><line x1="12" y1="1" x2="12" y2="9" stroke="%2335e6ff" stroke-width="2"/><line x1="12" y1="15" x2="12" y2="23" stroke="%2335e6ff" stroke-width="2"/><line x1="1" y1="12" x2="9" y2="12" stroke="%2335e6ff" stroke-width="2"/><line x1="15" y1="12" x2="23" y2="12" stroke="%2335e6ff" stroke-width="2"/><circle cx="12" cy="12" r="2.5" fill="none" stroke="%2335e6ff" stroke-width="1.4"/></svg>') 12 12, crosshair !important;
-  }
-
-  /* ---------- corner viewfinder brackets ---------- */
-
-  .hud-corner{
-    position:fixed;
-    width:44px; height:44px;
-    pointer-events:none;
-    z-index:520;
-    opacity:.6;
-    filter: drop-shadow(0 0 4px rgba(53,230,255,.55));
-  }
-  .hud-corner.tl{ top:60px; left:10px; border-top:2px solid var(--cyan); border-left:2px solid var(--cyan); }
-  .hud-corner.tr{ top:60px; right:10px; border-top:2px solid var(--cyan); border-right:2px solid var(--cyan); }
-  .hud-corner.bl{ bottom:10px; left:10px; border-bottom:2px solid var(--cyan); border-left:2px solid var(--cyan); }
-  .hud-corner.br{ bottom:10px; right:10px; border-bottom:2px solid var(--cyan); border-right:2px solid var(--cyan); }
-
-  /* ---------- perimeter scan comet ---------- */
-
-  #perimeter-scan{
-    position:fixed;
-    width:7px; height:7px;
-    margin:-3.5px 0 0 -3.5px;
-    border-radius:50%;
-    background: var(--cyan);
-    box-shadow: 0 0 10px 3px rgba(53,230,255,.85);
-    z-index:521;
-    pointer-events:none;
-    animation: perimeterTravel 10s linear infinite;
-  }
-  @keyframes perimeterTravel{
-    0%   { left:0;    top:52px;  }
-    25%  { left:100%; top:52px;  }
-    50%  { left:100%; top:100%; }
-    75%  { left:0;    top:100%; }
-    100% { left:0;    top:52px;  }
-  }
-
-  /* ---------- coordinate rulers ---------- */
-
-  .ruler{
-    position:absolute;
-    z-index:510;
-    pointer-events:none;
-    overflow:hidden;
-  }
-  #ruler-top{ left:0; right:0; top:52px; height:16px; }
-  #ruler-bottom{ left:0; right:0; bottom:0; height:16px; }
-  #ruler-left{ left:0; top:52px; bottom:0; width:16px; }
-  #ruler-right{ right:0; top:52px; bottom:0; width:16px; }
-
-  .tick{
-    position:absolute;
-    font-size:8px;
-    letter-spacing:.5px;
-    color: var(--cyan-dim);
-    white-space:nowrap;
-  }
-  .tick::before{
-    content:"";
-    position:absolute;
-    background: rgba(51,226,255,.35);
-  }
-  #ruler-top .tick{ top:1px; transform:translateX(-50%); }
-  #ruler-top .tick::before{ left:50%; top:-5px; width:1px; height:5px; }
-  #ruler-bottom .tick{ bottom:1px; transform:translateX(-50%); }
-  #ruler-bottom .tick::before{ left:50%; bottom:-5px; width:1px; height:5px; }
-  #ruler-left .tick{ left:3px; writing-mode:vertical-rl; transform:translateY(-50%); }
-  #ruler-left .tick::before{ top:50%; left:-5px; width:5px; height:1px; }
-  #ruler-right .tick{ right:3px; writing-mode:vertical-rl; transform:translateY(-50%); }
-  #ruler-right .tick::before{ top:50%; right:-5px; width:5px; height:1px; }
-
-  /* ---------- lock-on reticle (marker click) ---------- */
-
-  .lock-reticle{
-    position:absolute;
-    z-index:650;
-    pointer-events:none;
-    opacity:0;
-    transform: translate(-50%,-50%) scale(2.2);
-  }
-  .lock-reticle.lock-reticle-anim{
-    animation: reticleLock .85s ease-out forwards;
-  }
-  @keyframes reticleLock{
-    0%   { transform: translate(-50%,-50%) scale(2.4); opacity:0; }
-    35%  { opacity:1; }
-    60%  { transform: translate(-50%,-50%) scale(1); opacity:1; }
-    100% { transform: translate(-50%,-50%) scale(.85); opacity:0; }
-  }
-
-  /* ---------- boot sequence ---------- */
-
-  #boot-sequence{
-    position:fixed; inset:0; z-index:3000;
-    background: var(--bg-deep);
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-family: var(--font-mono);
-    transition: opacity .6s ease;
-    background-image:
-      linear-gradient(var(--grid) 1px, transparent 1px),
-      linear-gradient(90deg, var(--grid) 1px, transparent 1px);
-    background-size: 46px 46px;
-  }
-  #boot-sequence.boot-hidden{
-    opacity:0;
-    pointer-events:none;
-  }
-  .boot-inner{ width:440px; max-width:82vw; }
-  .boot-inner .boot-title{
-    font-family: var(--font-display);
-    color: var(--cyan);
-    letter-spacing:3px;
-    font-size:13px;
-    margin-bottom:18px;
-    text-shadow: 0 0 10px rgba(53,230,255,.6);
-  }
-  .boot-line{
-    font-size:12.5px;
-    color: var(--cyan);
-    letter-spacing:.5px;
-    min-height:18px;
-    margin-bottom:5px;
-    white-space:nowrap;
-    overflow:hidden;
-  }
-  .boot-line:empty::after{ content:""; }
-  .boot-line:not(:empty)::after{
-    content:"▌";
-    margin-left:2px;
-    opacity:.8;
-    animation: blink 1s step-start infinite;
-  }
-  .boot-bar{
-    margin-top:16px;
-    height:4px;
-    background: rgba(53,230,255,.12);
-    border:1px solid var(--line);
-  }
-  .boot-bar-fill{
-    height:100%;
-    width:0%;
-    background: var(--cyan);
-    box-shadow: 0 0 8px rgba(53,230,255,.7);
-    transition: width .25s linear;
-  }
-/* Shared navigation to the reporting dashboard. */
-.dashboard-nav{position:fixed;top:10px;right:16px;z-index:1001;display:flex;align-items:center;gap:8px;padding:8px 12px;border:1px solid rgba(53,230,255,.4);border-radius:5px;background:#09202ef2;color:#a0f3ff;font:11px 'Share Tech Mono',sans-serif;text-decoration:none;box-shadow:0 0 16px #35e6ff15;transition:box-shadow .25s,background .25s}
-.dashboard-nav:hover{background:#123445;box-shadow:0 0 22px #35e6ff44}.dashboard-nav:focus-visible{outline:2px solid #35e6ff;outline-offset:3px}#top-bar{padding-right:152px}
-#top-bar{gap:16px}#top-bar .hud-stat{flex:none}#top-bar .hud-stat span{letter-spacing:.6px}#top-bar .brand{font-size:14px;letter-spacing:1px}
-@media(max-width:1050px){#top-bar{gap:12px}#top-bar .hud-stat:has(#hud-clock),#top-bar .hud-stat:has(#hud-date){display:none}#top-bar .hud-sep{display:none}}
-@media(max-width:720px){#top-bar{height:98px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;padding:10px 12px;overflow:hidden}#top-bar .brand{grid-column:1/-1;font-size:12px;align-self:start;padding-right:125px}#top-bar .status-tag{display:none}#top-bar .spacer{display:none}#top-bar .hud-stat{align-self:end}#top-bar .hud-stat span{font-size:8px;letter-spacing:0;white-space:normal;line-height:1.3}#top-bar .hud-stat b{font-size:15px}.dashboard-nav{top:7px;right:10px;padding:7px 9px}#map{top:98px;height:calc(100% - 98px)}}
-</style>
+<link rel="stylesheet" href="map-studio.css?v=20261108-atlas">
 </head>
 <body data-map-mode="mine">
-
-<div id="hud-bg"></div>
-<a class="dashboard-nav" href="dashboard.html" aria-label="Перейти до дашборду">▦ Дашборд <span aria-hidden="true">↗</span></a>
-
-<div id="top-bar">
-  <div class="brand">EORE // СЕСІЇ</div>
-  <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-clock">--:--:--</b><span>місцевий час</span></div>
-  <div class="hud-sep"></div>
-  <div class="hud-stat"><b id="hud-date">----</b><span>дата</span></div>
-  <div class="hud-sep"></div>
+<a class="skip-link" href="#map">До мапи</a>
+<header id="top-bar">
+  <a class="product-brand" href="dashboard.html" aria-label="EORE Analytics — відкрити дашборд">
+    <svg viewBox="0 0 40 46" fill="none" aria-hidden="true"><path d="M20 2 37 12v22L20 44 3 34V12Z" stroke="#65dff5" stroke-width="1.8"/><path d="m14 29 4-15 11-3-4 15-11 3Z" stroke="#65dff5" stroke-width="1.5"/><path d="m18 14 7 12" stroke="#65dff5" stroke-width="1.5"/><circle cx="20" cy="35" r="2" fill="#63ebbd"/></svg>
+    <div><strong>EORE</strong><small>ANALYTICS</small></div>
+  </a>
+  <div class="top-context"><span>Харківська область</span><div class="brand">Мапа сесій</div></div>
   <div class="hud-stat"><b id="hud-total">0</b><span>усього сесій</span></div>
-  <div class="hud-sep"></div>
   <div class="hud-stat"><b id="hud-shown">0</b><span>сесій за фільтрами</span></div>
-  <div class="hud-sep"></div>
   <div class="hud-stat"><b id="hud-participants">0</b><span>учасників за фільтрами</span></div>
   <div class="spacer"></div>
   <div class="status-tag" id="hud-live" role="status">● ЗАВАНТАЖЕННЯ</div>
-</div>
-
-<div id="map"></div>
-
-<div class="hud-corner tl"></div>
-<div class="hud-corner tr"></div>
-<div class="hud-corner bl"></div>
-<div class="hud-corner br"></div>
-<div id="perimeter-scan"></div>
-
-<div id="ruler-top" class="ruler"></div>
-<div id="ruler-bottom" class="ruler"></div>
-<div id="ruler-left" class="ruler"></div>
-<div id="ruler-right" class="ruler"></div>
-
-<div id="coord-readout"><span class="lbl">LAT</span><span id="coord-lat">—</span> &nbsp; <span class="lbl">LON</span><span id="coord-lon">—</span></div>
-
-<div id="radar"><span>SCAN</span></div>
-
-<div id="hud-scan"></div>
-<div id="hud-vignette"></div>
-
-<div id="boot-sequence">
-  <div class="boot-inner">
-    <div class="boot-title">EORE // СЕСІЇ</div>
-    <div class="boot-line" id="boot-line-1"></div>
-    <div class="boot-line" id="boot-line-2"></div>
-    <div class="boot-line" id="boot-line-3"></div>
-    <div class="boot-line" id="boot-line-4"></div>
-    <div class="boot-bar"><div class="boot-bar-fill" id="boot-bar-fill"></div></div>
-  </div>
-</div>
-
+  <a class="dashboard-nav" href="dashboard.html"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg><span>Дашборд</span><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M7 17 17 7M7 7h10v10"/></svg></a>
+</header>
+<main id="map" aria-label="Інтерактивна мапа проведених сесій" tabindex="-1">
+  <div class="scene-heading"><div class="scene-kicker">FIELD ACTIVITY / EORE</div><h2>Географія інформування</h2><p id="selection-caption">Проведені сесії з мінної небезпеки · Харківська область</p></div>
+  <div class="map-north" aria-hidden="true"><span>N</span><svg viewBox="0 0 24 32" fill="none"><path d="m12 2 8 26-8-6-8 6L12 2Z" stroke="#8fb5c9"/><path d="m12 2 8 26-8-6V2Z" fill="#65dff5" fill-opacity=".55"/></svg></div>
+  <div class="map-layer-switch glass-map" role="group" aria-label="Шари мапи"><button id="studio-points" type="button" aria-pressed="true"><span data-map-icon="points"></span>Точки</button><button id="studio-heat" type="button" aria-pressed="true"><span data-map-icon="heat"></span>Тепло</button></div>
+  <section class="map-legend glass-map" aria-label="Легенда теплової карти"><div class="legend-heading"><strong>Інтенсивність охоплення</strong><span>ВІДНОСНА ШКАЛА</span></div><div class="heat-ramp"></div><div class="legend-scale"><span>Менше учасників</span><span>Більше учасників</span></div><p class="legend-note">Показує проведене інформування.<br>Не є оцінкою мінної небезпеки території.</p></section>
+  <div class="map-dock glass-map" role="group" aria-label="Режим мапи"><button type="button" id="studio-sessions" aria-pressed="true"><span data-map-icon="map"></span><span>Мапа сесій</span></button><button type="button" id="studio-air" aria-pressed="false"><span data-map-icon="radar"></span><span>Повітряні загрози</span></button><span class="dock-divider" aria-hidden="true"></span><button type="button" id="fit-map" title="Показати всю область" aria-label="Показати всю область"><span data-map-icon="focus"></span><span>Вся область</span></button></div>
+  <div class="map-empty glass-map" id="map-empty" role="status" hidden><span data-map-icon="search"></span><strong>Сесій не знайдено</strong><p>Зміни період або інші фільтри, щоб побачити проведені сесії.</p></div>
+  <div class="map-footer"><i></i>Харківська область · Люди. Знання. Безпека.</div>
+  <div id="coord-readout" class="map-coordinates"><span class="lbl">LAT</span><span id="coord-lat">—</span><span class="lbl">LON</span><span id="coord-lon">—</span></div>
+</main>
+<div id="boot-sequence" aria-label="Завантаження мапи"><div class="boot-inner"><div class="boot-orbit" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3"><path d="m12 2 9 5v10l-9 5-9-5V7l9-5Z"/><path d="m8 16 2-8 6-2-2 8-6 2Z"/></svg></div><div class="boot-title">EORE ATLAS</div><p class="boot-subtitle">Кожна сесія — крок до безпечнішої громади</p><div class="boot-line" id="boot-line-1"></div><div class="boot-line" id="boot-line-2"></div><div class="boot-line" id="boot-line-3"></div><div class="boot-line" id="boot-line-4"></div><div class="boot-bar"><div class="boot-bar-fill" id="boot-bar-fill"></div></div></div></div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
 <script src="assets/vendor/leaflet-heat-0.2.0.js"></script>
+<script src="map-heat.js?v=20261108-atlas"></script>
+<script src="map-studio.js?v=20261108-atlas"></script>
 <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <script>
@@ -761,17 +118,17 @@ function hslToHex(h, s, l) {
 
 function getHeatGradient() {
   const purple = heatSettings.purpleStrength;
-  const purple1 = hslToHex(268, 100, Math.max(28, 58 - purple * 0.20));
-  const purple2 = hslToHex(252, 100, Math.max(34, 62 - purple * 0.14));
+  const purple1 = hslToHex(263, 80, Math.max(35, 70 - purple * 0.1));
+  const purple2 = hslToHex(255, 80, Math.max(40, 72 - purple * 0.1));
 
   return {
     0.03: purple1,
     0.12: purple2,
-    0.28: "#4b5dff",
-    0.48: "#35c6ff",
-    0.68: "#51ff7a",
-    0.84: "#ffe14a",
-    1.00: "#ff3b30"
+    0.28: "#5667f3",
+    0.48: "#52d9ed",
+    0.68: "#5bf4c2",
+    0.84: "#d4f785",
+    1.00: "#ffca7b"
   };
 }
 
@@ -785,17 +142,7 @@ function downloadBlob(blob, filename) {
   URL.revokeObjectURL(link.href);
 }
 
-// ===== HUD CHROME (clock / coords / stats) =====
-function tickClock() {
-  const now = new Date();
-  const clockEl = document.getElementById("hud-clock");
-  const dateEl = document.getElementById("hud-date");
-  if (clockEl) clockEl.textContent = now.toLocaleTimeString("uk-UA", { hour12: false });
-  if (dateEl) dateEl.textContent = now.toLocaleDateString("uk-UA");
-}
-tickClock();
-setInterval(tickClock, 1000);
-
+// ===== SESSION HUD =====
 // Each mode owns the shared HUD. Late session responses must not overwrite AIR.
 var sessionsFeedState = { text: "● ЗАВАНТАЖЕННЯ", color: "var(--amber)", title: "" };
 
@@ -806,7 +153,7 @@ function setSessionsFeedState(text, color, title) {
 
 function updateHudStats() {
   if (document.body.dataset.mapMode === "air") return;
-  document.querySelector("#top-bar .brand").textContent = "EORE // СЕСІЇ";
+  document.querySelector("#top-bar .brand").textContent = "Мапа сесій";
   const labels = { "hud-total": "усього сесій", "hud-shown": "сесій за фільтрами", "hud-participants": "учасників за фільтрами" };
   Object.keys(labels).forEach(function(id) {
     const el = document.getElementById(id);
@@ -822,21 +169,22 @@ function updateHudStats() {
   const shownEl = document.getElementById("hud-shown");
   const participantsEl = document.getElementById("hud-participants");
 
-  if (totalEl) totalEl.textContent = allSessions.length;
-  if (shownEl) shownEl.textContent = currentFeatures.length;
+  if (totalEl) totalEl.textContent = allSessions.length.toLocaleString("uk-UA");
+  if (shownEl) shownEl.textContent = currentFeatures.length.toLocaleString("uk-UA");
 
   if (participantsEl) {
     const sum = currentFeatures.reduce(function(acc, f) {
       return acc + safeNumber((f.properties || {}).participants_total);
     }, 0);
-    participantsEl.textContent = sum;
+    participantsEl.textContent = sum.toLocaleString("uk-UA");
   }
 }
 
 // ===== MAP =====
-var map = L.map("map", { zoomControl: true }).setView([49.9935, 36.2304], 8);
+var map = L.map("map", { zoomControl: false, fadeAnimation: true, markerZoomAnimation: true }).setView([49.9935, 36.2304], 8);
 var kharkivBounds = L.latLngBounds([[48.5, 34.8], [50.6, 38.3]]);
 map.fitBounds(kharkivBounds);
+L.control.zoom({ position: "bottomright" }).addTo(map);
 
 map.on("mousemove", function(e) {
   var latEl = document.getElementById("coord-lat");
@@ -844,43 +192,6 @@ map.on("mousemove", function(e) {
   if (latEl) latEl.textContent = e.latlng.lat.toFixed(4);
   if (lonEl) lonEl.textContent = e.latlng.lng.toFixed(4);
 });
-
-// ===== COORDINATE RULERS (CAD/targeting-overlay style) =====
-function renderRulers() {
-  var topRuler = document.getElementById("ruler-top");
-  var bottomRuler = document.getElementById("ruler-bottom");
-  var leftRuler = document.getElementById("ruler-left");
-  var rightRuler = document.getElementById("ruler-right");
-
-  if (!topRuler || !bottomRuler || !leftRuler || !rightRuler) return;
-
-  var size = map.getSize();
-  var stepX = 130;
-  var stepY = 110;
-  var margin = 24;
-
-  var hTicks = "";
-  for (var x = margin; x < size.x - margin; x += stepX) {
-    var lngAt = map.containerPointToLatLng([x, 0]).lng;
-    hTicks += '<span class="tick" style="left:' + x + 'px">' + lngAt.toFixed(3) + "°</span>";
-  }
-  topRuler.innerHTML = hTicks;
-  bottomRuler.innerHTML = hTicks;
-
-  var vTicksLeft = "";
-  var vTicksRight = "";
-  for (var y = margin; y < size.y - margin; y += stepY) {
-    var latAtLeft = map.containerPointToLatLng([0, y]).lat;
-    var latAtRight = map.containerPointToLatLng([size.x, y]).lat;
-    vTicksLeft += '<span class="tick" style="top:' + y + 'px">' + latAtLeft.toFixed(3) + "°</span>";
-    vTicksRight += '<span class="tick" style="top:' + y + 'px">' + latAtRight.toFixed(3) + "°</span>";
-  }
-  leftRuler.innerHTML = vTicksLeft;
-  rightRuler.innerHTML = vTicksRight;
-}
-
-map.on("moveend zoomend resize", renderRulers);
-map.whenReady(renderRulers);
 
 // ===== LOCK-ON RETICLE (marker click) =====
 function showLockReticle(containerPoint) {
@@ -949,7 +260,16 @@ var baseLayers = {
 };
 
 // ===== LIVE DATA =====
-var clusterLayer = L.markerClusterGroup();
+var clusterLayer = L.markerClusterGroup({
+  showCoverageOnHover: false, maxClusterRadius: 48,
+  iconCreateFunction: MapStudio.clusterIcon,
+  animate: !matchMedia('(prefers-reduced-motion: reduce)').matches
+});
+clusterLayer.on('clustermouseover', function(event) {
+  const count = event.layer.getChildCount();
+  const people = event.layer.getAllChildMarkers().reduce((sum, marker) => sum + safeNumber(marker.feature?.properties?.participants_total), 0);
+  event.layer.bindTooltip(count.toLocaleString('uk-UA') + ' ' + MapStudio.sessionLabel(count) + ' · ' + people.toLocaleString('uk-UA') + ' ' + MapStudio.peopleLabel(people), { direction: 'top', className: 'cluster-tooltip' }).openTooltip();
+});
 var heatLayer = null;
 var heatProxy = L.layerGroup();
 
@@ -958,8 +278,8 @@ var currentFeatures = [];
 var settlementsLookup = new Map();
 
 const heatSettings = {
-  radius: 40,
-  blur: 36,
+  radius: 46,
+  blur: 38,
   maxZoom: 12,
   minOpacity: 0.30,
   exponent: 0.42,
@@ -1028,15 +348,7 @@ function convertRowsToFeatures(rows) {
   return features;
 }
 
-function hudDivIcon() {
-  return L.divIcon({
-    className: "",
-    html: '<div class="hud-marker"></div>',
-    iconSize: [14, 14],
-    iconAnchor: [7, 7],
-    popupAnchor: [0, -8]
-  });
-}
+function hudDivIcon() { return MapStudio.pointIcon(); }
 
 function buildLayers(features) {
   currentFeatures = features;
@@ -1058,21 +370,8 @@ function buildLayers(features) {
     onEachFeature: function(f, layer) {
       var p = f.properties || {};
 
-      var instructors = [p.instructor_1, p.instructor_2]
-        .filter(Boolean)
-        .join(", ");
-
-      var html =
-        "<b>" + (p.settlement || "Населений пункт") + "</b><br>" +
-        (p.hromada || "—") + (p.raion ? ", " + p.raion : "") + "<br>" +
-        "Дата: " + (p.session_date || "—") + "<br>" +
-        "Інструктори: " + (instructors || "—") + "<br>" +
-        "Усього учасників: " + (p.participants_total ?? "—") + "<br>" +
-        "До 18: " + (p.participants_u18 ?? "—") + "<br>" +
-        "18+: " + (p.participants_18plus ?? "—") +
-        (p.notes ? "<br>Примітки: " + p.notes : "");
-
-      layer.bindPopup(html);
+      layer.bindPopup(MapStudio.popup(p), { maxWidth: 340, autoPanPaddingTopLeft: L.point(innerWidth > 760 ? 340 : 20, 30), autoPanPaddingBottomRight: L.point(80, 100) });
+      layer.options.title = (p.settlement || 'Сесія') + ' · ' + safeNumber(p.participants_total) + ' ' + MapStudio.peopleLabel(safeNumber(p.participants_total));
 
       layer.on("click", function(e) {
         var point = map.latLngToContainerPoint(e.latlng);
@@ -1119,7 +418,7 @@ function buildLayers(features) {
     }).filter(Boolean);
 
     if (!heatLayer) {
-      heatLayer = L.heatLayer(heatData, {
+      heatLayer = (L.sessionHeatLayer || L.heatLayer)(heatData, {
         radius: heatSettings.radius,
         blur: heatSettings.blur,
         maxZoom: heatSettings.maxZoom,
@@ -1138,6 +437,7 @@ function buildLayers(features) {
   }
 
   updateHudStats();
+  MapStudio.refresh();
 }
 
 function populateFilterOptions(features) {
@@ -1273,23 +573,22 @@ async function loadLiveSessions() {
 }
 
 // ===== CONTROLS =====
-var searchControl = L.control({ position: "topright" });
+var searchControl = L.control({ position: "topleft" });
 searchControl.onAdd = function() {
   var div = L.DomUtil.create("div", "control-box");
   div.id = "filters-panel";
 
-  div.innerHTML =
-    '<div class="section-title">Target Filters</div>' +
-    '<label>Період від</label><input type="date" id="start-date" />' +
-    '<label>Період до</label><input type="date" id="end-date" />' +
-    '<label>Інструктор</label><select id="instructor-filter"><option value="">Усі інструктори</option></select>' +
-    '<label>Район</label><select id="raion-filter"><option value="">Усі райони</option></select>' +
-    '<label>Громада</label><select id="hromada-filter"><option value="">Усі громади</option></select>' +
-    '<label>Населений пункт</label><select id="settlement-filter"><option value="">Усі населені пункти</option></select>' +
-    '<button id="filter-btn">Застосувати</button>' +
-    '<button id="reset-btn">Скинути фільтри</button>' +
-    '<button id="refresh-btn">Оновити дані</button>' +
-    '<div id="export-status" class="export-status"></div>';
+  div.innerHTML = `
+    <div class="filter-intro"><div class="filter-kicker"><i></i>ПРОТИМІННА ДІЯЛЬНІСТЬ</div><h1>Люди. Знання.<br><em>Безпека.</em></h1><p>Де й для кого ми проводимо<br>інформування з мінної небезпеки.</p></div>
+    <div class="filter-section-heading"><div class="section-title">Фільтри сесій</div><span id="filter-count">Увесь період</span></div>
+    <div class="filter-fields"><div class="date-grid"><div class="filter-field"><label for="start-date">Період від</label><input type="date" id="start-date"></div><div class="filter-field"><label for="end-date">Період до</label><input type="date" id="end-date"></div></div>
+    <div class="filter-field"><label for="instructor-filter">Інструктор</label><select id="instructor-filter"><option value="">Усі інструктори</option></select></div>
+    <div class="filter-field"><label for="raion-filter">Район</label><select id="raion-filter"><option value="">Усі райони</option></select></div>
+    <div class="filter-field"><label for="hromada-filter">Громада</label><select id="hromada-filter"><option value="">Усі громади</option></select></div>
+    <div class="filter-field"><label for="settlement-filter">Населений пункт</label><select id="settlement-filter"><option value="">Усі населені пункти</option></select></div>
+    </div><div class="filter-actions"><button id="filter-btn" type="button">${MapStudio.icon('filter')} Застосувати фільтри</button>
+    <div class="filter-footer"><button id="reset-btn" type="button">Скинути фільтри</button><button id="refresh-btn" type="button">${MapStudio.icon('refresh')} Оновити</button></div>
+    <div id="export-status" class="export-status" role="status"></div></div>`;
 
   L.DomEvent.disableClickPropagation(div);
   L.DomEvent.disableScrollPropagation(div);
@@ -1298,7 +597,7 @@ searchControl.onAdd = function() {
 searchControl.addTo(map);
 
 // ===== ICONS =====
-var topLeftIcons = L.control({ position: "topleft" });
+var topLeftIcons = L.control({ position: "topright" });
 topLeftIcons.onAdd = function() {
   var div = L.DomUtil.create("div", "icon-control");
   div.innerHTML = `
@@ -1313,7 +612,7 @@ topLeftIcons.onAdd = function() {
 topLeftIcons.addTo(map);
 
 // ===== SETTINGS PANEL =====
-var heatSettingsControl = L.control({ position: "topleft" });
+var heatSettingsControl = L.control({ position: "topright" });
 heatSettingsControl.onAdd = function() {
   var div = L.DomUtil.create("div", "control-box");
   div.style.width = "270px";
@@ -1321,27 +620,27 @@ heatSettingsControl.onAdd = function() {
   div.style.display = "none";
 
   div.innerHTML = `
-    <div class="section-title">Heatmap Params</div>
+    <div class="section-title">Світло та теплова карта</div>
 
-    <label class="small-label">Radius <span id="radius-value">${heatSettings.radius}</span></label>
+    <label class="small-label">Радіус <span id="radius-value">${heatSettings.radius}</span></label>
     <input type="range" id="radius-slider" min="10" max="80" step="1" value="${heatSettings.radius}">
 
-    <label class="small-label">Blur <span id="blur-value">${heatSettings.blur}</span></label>
+    <label class="small-label">М’якість <span id="blur-value">${heatSettings.blur}</span></label>
     <input type="range" id="blur-slider" min="5" max="60" step="1" value="${heatSettings.blur}">
 
-    <label class="small-label">Min opacity <span id="opacity-value">${heatSettings.minOpacity}</span></label>
+    <label class="small-label">Мінімальна видимість <span id="opacity-value">${heatSettings.minOpacity}</span></label>
     <input type="range" id="opacity-slider" min="0.05" max="0.80" step="0.01" value="${heatSettings.minOpacity}">
 
-    <label class="small-label">Exponent <span id="exponent-value">${heatSettings.exponent}</span></label>
+    <label class="small-label">Контраст ваг <span id="exponent-value">${heatSettings.exponent}</span></label>
     <input type="range" id="exponent-slider" min="0.20" max="1.00" step="0.01" value="${heatSettings.exponent}">
 
-    <label class="small-label">Min floor <span id="floor-value">${heatSettings.minFloor}</span></label>
+    <label class="small-label">Мінімальна вага <span id="floor-value">${heatSettings.minFloor}</span></label>
     <input type="range" id="floor-slider" min="0.01" max="0.40" step="0.01" value="${heatSettings.minFloor}">
 
-    <label class="small-label">Фіолетовий <span id="purple-value">${heatSettings.purpleStrength}</span></label>
+    <label class="small-label">Фіолетовий акцент <span id="purple-value">${heatSettings.purpleStrength}</span></label>
     <input type="range" id="purple-slider" min="30" max="120" step="1" value="${heatSettings.purpleStrength}">
 
-    <button id="reset-heat-settings">Скинути</button>
+    <button id="reset-heat-settings">Відновити вигляд</button><p class="settings-note">Колір показує відносну інтенсивність охоплення. Вага точок залежить від кількості учасників. Це не карта небезпеки.</p>
   `;
 
   L.DomEvent.disableClickPropagation(div);
@@ -1386,7 +685,13 @@ async function exportMapToPNG() {
       useCORS: true,
       backgroundColor: null,
       logging: false,
-      scale: 2
+      scale: 2,
+      onclone: function(doc) {
+        // html2canvas does not render modern mask/conic-gradient panel borders.
+        const style = doc.createElement('style');
+        style.textContent = '.control-box:after,.glass-map:after{display:none!important}*{animation:none!important;transition:none!important}';
+        doc.head.appendChild(style);
+      }
     });
 
     canvas.toBlob(function(blob) {
@@ -1468,8 +773,8 @@ setTimeout(function() {
   });
 
   document.getElementById("reset-heat-settings").addEventListener("click", function() {
-    heatSettings.radius = 40;
-    heatSettings.blur = 36;
+    heatSettings.radius = 46;
+    heatSettings.blur = 38;
     heatSettings.minOpacity = 0.30;
     heatSettings.exponent = 0.42;
     heatSettings.minFloor = 0.10;
@@ -1560,28 +865,13 @@ var overlays = {
   "Теплова карта охоплення": heatProxy
 };
 
-L.control.layers(baseLayers, overlays, { collapsed: false }).addTo(map);
+L.control.layers(baseLayers, overlays, { collapsed: true, position: "bottomright" }).addTo(map);
 
 // ===== DEFAULT LAYERS =====
 map.addLayer(clusterLayer);
 map.addLayer(heatProxy);
 
 // ===== BOOT SEQUENCE =====
-function typeLine(el, text, speed) {
-  return new Promise(function(resolve) {
-    var i = 0;
-    el.textContent = "";
-    var timer = setInterval(function() {
-      el.textContent = text.slice(0, i + 1);
-      i++;
-      if (i >= text.length) {
-        clearInterval(timer);
-        resolve();
-      }
-    }, speed);
-  });
-}
-
 function wait(ms) {
   return new Promise(function(resolve) { setTimeout(resolve, ms); });
 }
@@ -1596,24 +886,12 @@ async function runBootSequence(dataPromise) {
 
   if (!overlay) return;
 
-  barFill.style.width = "8%";
-  await typeLine(line1, "> ACCESSING DATABASE...", 18);
-  barFill.style.width = "35%";
-  await wait(150);
-
-  await typeLine(line2, "> AUTH OK", 22);
+  barFill.style.width = "20%";
+  line1.textContent = 'Відкриваємо географію нашої роботи';
   barFill.style.width = "55%";
-  await wait(150);
-
-  await typeLine(line3, "> LOADING GRID...", 18);
-  barFill.style.width = "80%";
-
-  // чекаємо реальні дані з Google Sheets, але не довше 4с
-  await Promise.race([dataPromise, wait(4000)]);
-
+  await Promise.race([dataPromise, wait(1800)]);
   barFill.style.width = "100%";
-  await typeLine(line4, "> RENDERING MAP LAYERS...", 14);
-  await wait(300);
+  await wait(matchMedia('(prefers-reduced-motion: reduce)').matches ? 0 : 220);
 
   overlay.classList.add("boot-hidden");
 }
@@ -1622,6 +900,6 @@ async function runBootSequence(dataPromise) {
 var sessionsLoadPromise = loadLiveSessions();
 runBootSequence(sessionsLoadPromise);
 </script>
-<script src="air-mode.js?v=20261108-session-hud"></script>
+<script src="air-mode.js?v=20261108-atlas"></script>
 </body>
 </html>
