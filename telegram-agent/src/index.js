@@ -139,6 +139,32 @@ export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") return json({ ok: true, service: "eore-analytics-agent" });
+    // Temporary, secret-protected diagnostic. No Telegram messages or KV writes.
+    // Remove after successful verification.
+    if (url.pathname === "/test-ai" && request.method === "POST") {
+      if (!env.TELEGRAM_WEBHOOK_SECRET || !env.AI) return json({ error: "not configured" }, 503);
+      if (!secureEquals(request.headers.get("X-Agent-Test-Secret"), env.TELEGRAM_WEBHOOK_SECRET)) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      try {
+        const result = await env.AI.run(MODEL, {
+          messages: [
+            { role: "system", content: "Відповідай українською одним коротким реченням. Не додавай жодних інших деталей." },
+            { role: "user", content: "Напиши: Тест української мови успішний." }
+          ],
+          max_tokens: 80,
+          temperature: 0
+        });
+        if (typeof result?.response !== "string" || !result.response.trim()) {
+          return json({ ok: false, error: "empty model response" }, 502);
+        }
+        return json({ ok: true, model: MODEL, response: result.response.trim() });
+      } catch (e) {
+        // No secret, token, prompt, or full provider error returned to the client.
+        console.error("AI diagnostic failed", String(e?.message || "unknown").slice(0, 100));
+        return json({ ok: false, error: "AI inference failed; inspect Cloudflare logs" }, 502);
+      }
+    }
     if (url.pathname !== "/telegram/webhook" || request.method !== "POST") return json({ error: "not found" }, 404);
     if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_USERNAME || !env.AI || !env.AGENT_KV) return json({ error: "not configured" }, 503);
     if (!secureEquals(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TELEGRAM_WEBHOOK_SECRET)) return json({ error: "unauthorized" }, 401);
