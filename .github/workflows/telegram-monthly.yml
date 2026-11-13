@@ -1,0 +1,43 @@
+name: EORE Telegram monthly report
+on:
+  schedule:
+    - cron: '15 7 2 * *'
+  workflow_dispatch:
+    inputs:
+      month:
+        description: 'Reporting month YYYY-MM (empty = previous month)'
+        required: false
+        type: string
+      dry_run:
+        description: 'Generate and validate without posting'
+        required: false
+        default: true
+        type: boolean
+permissions:
+  contents: read
+concurrency:
+  group: eore-telegram-monthly
+  cancel-in-progress: false
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python -m pip install --disable-pip-version-check Pillow==11.3.0
+      - name: Validate and publish
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          REPORT_MONTH: ${{ inputs.month }}
+          DRY_RUN: ${{ inputs.dry_run }}
+        run: python telegram-report/report.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: eore-report-preview
+          path: telegram-report/output/*.png
+          if-no-files-found: ignore
