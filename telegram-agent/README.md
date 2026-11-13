@@ -1,44 +1,43 @@
-# EORE Analytics Telegram AI agent — Cloudflare Workers
+# EORE Analytics Telegram agent
 
-Separate from the existing scheduled monthly Telegram report. **Not active until explicitly deployed and the Telegram webhook is registered.**
+Cloudflare Worker deployed from `telegram-agent/` in `deafinicio/mine-risk-map`. Active Telegram webhook: `https://eore-analytics-agent.deafinicio.workers.dev/telegram/webhook`.
 
-## Existing Cloudflare setup
-- Worker: `eore-analytics-agent`
-- URL: `https://eore-analytics-agent.deafinicio.workers.dev`
-- AI binding: `AI` (Workers AI)
-- Secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`
-- Plain variable still required: `TELEGRAM_BOT_USERNAME` (username without @, for reliable mention/reply detection)
+## Configuration
+- Workers AI binding: `AI`
+- KV binding: `AGENT_KV` (namespace `eore-agent-state`)
+- Cloudflare secrets: `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`, `TELEGRAM_WEBHOOK_SECRET`
+- Text variable: `TELEGRAM_BOT_USERNAME=eore_cpp_bot`
+- `keep_vars: true` retains existing dashboard secrets during GitHub deployment.
+- No credentials in repository or logs.
 
-## Deploy
-Use Wrangler with the Cloudflare account authorized locally:
-```sh
-cd telegram-agent
-npx wrangler deploy
-```
-The binding is declared in `wrangler.jsonc`. Existing secrets should be verified after deployment. Never commit secrets.
+## Behaviour
+- Only configured group chat is accepted.
+- With Telegram Privacy Mode enabled, use `/ask@eore_cpp_bot`, `/eore@eore_cpp_bot`, or Reply to a bot message. Plain @mentions are not reliably delivered by Telegram with privacy mode on.
+- Replies are sent into the same forum topic if Telegram supplies `message_thread_id`.
+- Simple monthly/year-to-date questions on session counts and attendance (including children/adults) are computed in JavaScript from published monthly data. Ambiguous/complex questions go to Workers AI. Aggregated attendance is not guaranteed unique people.
+- Emergency safety response bypasses AI.
+- Only public monthly aggregated dashboard data are loaded.
 
-## Test BEFORE webhook registration
-```sh
-curl -i https://eore-analytics-agent.deafinicio.workers.dev/health
-```
-Expect HTTP 200 with `{"ok":true,...}`. A POST to `/telegram/webhook` without the secret header must return HTTP 401.
+## Limits and cost caveat
+- Best-effort KV quotas: 5 accepted requests/user/day, 40 accepted requests globally/day, 60 seconds between accepted requests/user. KV stores short-lived update IDs and quota counters.
+- **Cloudflare KV is eventually consistent; concurrent requests can bypass these limits. These are not hard billing caps.** If strict enforcement becomes necessary, use a transactional rate limiter such as a Durable Object and validate its current free-plan limits.
+- Review Cloudflare Workers AI and Workers free-plan usage and disable paid overages in Cloudflare billing settings. No code-only limit can guarantee zero charges if account billing settings allow paid usage.
 
-## Register webhook (ONLY after testing)
-Use a local terminal and the real Telegram token. Avoid pasting it into a browser URL or sharing it.
-```powershell
-$token = Read-Host "Telegram bot token"
-$hook = Read-Host "Webhook secret"
-$payload = @{ url = "https://eore-analytics-agent.deafinicio.workers.dev/telegram/webhook"; secret_token = $hook; allowed_updates = @("message"); drop_pending_updates = $true } | ConvertTo-Json
-Invoke-RestMethod -Method Post -Uri "https://api.telegram.org/bot$token/setWebhook" -ContentType "application/json" -Body $payload
-```
-**Warning:** `drop_pending_updates=true` discards queued updates. Use only after confirming no pending updates need processing. A Telegram bot can use only one webhook; registering replaces an existing webhook. Monthly outgoing GitHub Actions `sendPhoto` continues independently.
+## Monitoring
+Cloudflare Workers & Pages → eore-analytics-agent → Observability → Logs. Structured events: `request_accepted`, `request_skipped` (limited/duplicate), `stats_unavailable`, `ai_unavailable`, `response_sent` (deterministic/ai/safety), `handler_failed` (telegram_api/internal). No message text, user IDs, tokens or secrets are logged.
 
-## Important constraints
-- Processes only group messages from the configured numeric chat ID.
-- Replies to explicit `@username`, `/ask`, `/eore`, or replies to the bot. Does not scan ordinary group conversations.
-- This MVP has no long-term memory, no knowledge-base retrieval, and no durable deduplication/rate limiter yet. **Do not activate in a busy group before these are added.**
-- Public dashboard dataset is read from GitHub Pages; the model sees monthly aggregate metrics only.
-- Responses are automated, not professional emergency assessment.
-- Cloudflare Workers and Workers AI have separate free quotas. Do not enable paid overages. Model availability and limits must be verified in the Cloudflare dashboard.
-- For sensitive EORE questions, the model must acknowledge missing approved sources. Add vetted knowledge before relying on domain-specific answers.
-- Do not paste tokens or personal records in GitHub, chat, or logs.
+## Health and security
+- `GET /health` returns a service heartbeat.
+- `POST /telegram/webhook` requires Telegram's `X-Telegram-Bot-Api-Secret-Token` header and valid JSON.
+- Temporary `/test-ai` and `/test-state` routes have been removed.
+- Webhook registration is managed in Telegram and is not modified by deployments.
+- Existing scheduled report workflow `.github/workflows/telegram-monthly.yml` remains independent and unchanged.
+
+## Manual verification after deployment
+1. Confirm deployment Ready and `GET /health` returns 200.
+2. In Telegram, send `/ask@eore_cpp_bot Скільки сесій та учасників у жовтні 2026 року?` and check the published figures.
+3. Wait 60 seconds; Reply to the bot's message with a short question.
+4. Verify Cloudflare logs contain `response_sent`; ensure no `handler_failed`.
+5. Inspect Workers AI usage/quota and billing controls in Cloudflare.
+
+Never paste secrets into chats, screenshots or issue reports.
