@@ -165,6 +165,38 @@ export default {
         return json({ ok: false, error: "AI inference failed; inspect Cloudflare logs" }, 502);
       }
     }
+    // Temporary protected integration check; no Telegram messages or AI charges.
+    if (url.pathname === "/test-state" && request.method === "POST") {
+      if (!env.TELEGRAM_WEBHOOK_SECRET || !env.AGENT_KV) return json({ error: "not configured" }, 503);
+      if (!secureEquals(request.headers.get("X-Agent-Test-Secret"), env.TELEGRAM_WEBHOOK_SECRET)) {
+        return json({ error: "unauthorized" }, 401);
+      }
+      try {
+        const stats = await getStats();
+        const valid = stats.months.length > 0 && stats.months.every(m =>
+          Number.isFinite(m.sessions) && Number.isFinite(m.beneficiaries) &&
+          Number.isFinite(m.children) && Number.isFinite(m.adults) &&
+          m.children + m.adults === m.beneficiaries
+        );
+        const totals = stats.months.reduce((a, m) => ({
+          sessions: a.sessions + m.sessions,
+          beneficiaries: a.beneficiaries + m.beneficiaries
+        }), { sessions: 0, beneficiaries: 0 });
+        const key = "diagnostic:integration";
+        await env.AGENT_KV.put(key, "ok", { expirationTtl: 120 });
+        const stored = await env.AGENT_KV.get(key);
+        return json({
+          ok: valid && stored === "ok",
+          coverage: stats.coverage,
+          months: stats.months.length,
+          totals,
+          data_consistent: valid,
+          kv_read_write: stored === "ok"
+        }, valid && stored === "ok" ? 200 : 502);
+      } catch {
+        return json({ ok: false, error: "Integration check failed" }, 502);
+      }
+    }
     if (url.pathname !== "/telegram/webhook" || request.method !== "POST") return json({ error: "not found" }, 404);
     if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_USERNAME || !env.AI || !env.AGENT_KV) return json({ error: "not configured" }, 503);
     if (!secureEquals(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TELEGRAM_WEBHOOK_SECRET)) return json({ error: "unauthorized" }, 401);
