@@ -30,6 +30,43 @@ function isDirect(message, username) {
     message.reply_to_message?.from?.username?.toLowerCase() === username?.toLowerCase();
   return Boolean(mention || command || reply);
 }
+function logEvent(stage, details = {}) {
+  console.log(JSON.stringify({ service: "eore-analytics-agent", stage, ...details }));
+}
+function monthIndex(text) {
+  const names = ["січ", "лют", "берез", "квіт", "трав", "черв", "лип", "серп", "верес", "жовт", "листоп", "груд"];
+  const lower = text.toLowerCase();
+  const named = names.findIndex(n => lower.includes(n));
+  if (named !== -1) return named + 1;
+  const iso = lower.match(/(?:^|\D)2026[-./](0?[1-9]|1[0-2])(?:\D|$)/);
+  return iso ? Number(iso[1]) : null;
+}
+// Exact, code-calculated answers for straightforward monthly/annual metric queries.
+// Ambiguous, comparative and complex questions remain with the language model.
+function deterministicAnswer(text, stats) {
+  if (!Array.isArray(stats?.months)) return null;
+  const q = text.toLowerCase().replace(/^\/(?:ask|eore)(?:@\w+)?\s*/i, "").replace(/@eore_cpp_bot/gi, "");
+  const asksSessions = /сесій|сесії|сесію|занять|заходів/.test(q);
+  const asksPeople = /учасник|учасниц|людей|людин|охоплен|бенефіціар/.test(q);
+  const asksChildren = /дітей|дитин/.test(q);
+  const asksAdults = /доросл/.test(q);
+  if (!(asksSessions || asksPeople || asksChildren || asksAdults)) return null;
+  if (/порівня|динамік|відсот|процент|середн|найбільш|найменш|район|громад|міст|інструктор|команд|план|прогноз/.test(q)) return null;
+  const month = monthIndex(q);
+  const year = /202[0-9]/.test(q) ? Number(q.match(/202[0-9]/)[0]) : stats.year;
+  if (year !== stats.year) return "У доступному наборі немає статистики за " + year + " рік. " + DASHBOARD;
+  if (!month && !/за рік|за 2026|усього|всього|загалом|від початку року|за весь період/.test(q)) return null;
+  const selected = month ? stats.months.filter(m => Number(m.month.slice(-2)) === month) : stats.months;
+  if (!selected.length) return "За запитаний місяць дані ще не опубліковані. " + DASHBOARD;
+  const sum = field => selected.reduce((total, m) => total + Number(m[field] || 0), 0);
+  const values = [];
+  if (asksSessions) values.push(sum("sessions") + " сесій");
+  if (asksPeople) values.push(sum("beneficiaries") + " учасників");
+  if (asksChildren) values.push(sum("children") + " дітей");
+  if (asksAdults) values.push(sum("adults") + " дорослих");
+  const period = month ? selected[0].month : "опублікований період " + stats.coverage;
+  return "За " + period + ": " + values.join(", ") + ". Дані про охоплення не обов’язково означають кількість унікальних осіб. Джерело: " + DASHBOARD;
+}
 function isEmergency(text) {
   return /(знайш(ов|ла|ли)|вияв(ив|ила|или)|побач(ив|ила|или)|лежить|поряд|поруч|торкнув|підібрав|в руках|підняв)/i.test(text)
     && /(міна|мін[ауи]|гранат|снаряд|боєприпас|вибухонебезпеч|підозріл(ий|а|е|і) предмет|внп)/i.test(text);
@@ -46,9 +83,9 @@ async function telegram(env, method, payload) {
   if (!result.ok) throw new Error("Telegram API rejected request");
   return result;
 }
-async function send(env, chatId, replyTo, text) {
+async function send(env, chatId, replyTo, text, threadId) {
   return telegram(env, "sendMessage", {
-    chat_id: chatId, text: text.slice(0, 3800),
+    chat_id: chatId, ...(Number.isInteger(threadId) ? { message_thread_id: threadId } : {}), text: text.slice(0, 3800),
     reply_parameters: { message_id: replyTo, allow_sending_without_reply: true },
     link_preview_options: { is_disabled: true }
   });
@@ -114,14 +151,22 @@ async function handle(update, env) {
   const text = message.text.trim().slice(0, MAX_INPUT);
   if (!text) return;
   const admission = await reserveRequest(update, env);
-  if (admission !== "accepted") return;
+  if (admission !== "accepted") { logEvent("request_skipped", { reason: admission }); return; }
+  logEvent("request_accepted");
   if (isEmergency(text)) {
-    await send(env, message.chat.id, message.message_id, emergencyText());
+    await send(env, message.chat.id, message.message_id, emergencyText(), message.message_thread_id);
+    logEvent("response_sent", { type: "safety" });
     return;
   }
   let stats;
   try { stats = await getStats(); }
-  catch { stats = { status: "Статистика тимчасово недоступна. Не наводь жодних чисел." }; }
+  catch { stats = { status: "Статистика тимчасово недоступна. Не наводь жодних чисел." }; logEvent("stats_unavailable"); }
+  const computed = deterministicAnswer(text, stats);
+  if (computed) {
+    await send(env, message.chat.id, message.message_id, computed, message.message_thread_id);
+    logEvent("response_sent", { type: "deterministic" });
+    return;
+  }
   let answer;
   try {
     const result = await env.AI.run(MODEL, {
@@ -130,73 +175,17 @@ async function handle(update, env) {
     });
     answer = typeof result?.response === "string" ? result.response.trim() : "";
   } catch {
+    logEvent("ai_unavailable");
     answer = "Наразі ШІ-асистент недоступний. Спробуйте пізніше. Публічна статистика: " + DASHBOARD;
   }
-  await send(env, message.chat.id, message.message_id, answer || "Не вдалося підготувати відповідь. Спробуйте переформулювати запитання.");
+  await send(env, message.chat.id, message.message_id, answer || "Не вдалося підготувати відповідь. Спробуйте переформулювати запитання.", message.message_thread_id);
+  logEvent("response_sent", { type: "ai" });
 }
 
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") return json({ ok: true, service: "eore-analytics-agent" });
-    // Temporary, secret-protected diagnostic. No Telegram messages or KV writes.
-    // Remove after successful verification.
-    if (url.pathname === "/test-ai" && request.method === "POST") {
-      if (!env.TELEGRAM_WEBHOOK_SECRET || !env.AI) return json({ error: "not configured" }, 503);
-      if (!secureEquals(request.headers.get("X-Agent-Test-Secret"), env.TELEGRAM_WEBHOOK_SECRET)) {
-        return json({ error: "unauthorized" }, 401);
-      }
-      try {
-        const result = await env.AI.run(MODEL, {
-          messages: [
-            { role: "system", content: "Відповідай українською одним коротким реченням. Не додавай жодних інших деталей." },
-            { role: "user", content: "Напиши: Тест української мови успішний." }
-          ],
-          max_tokens: 80,
-          temperature: 0
-        });
-        if (typeof result?.response !== "string" || !result.response.trim()) {
-          return json({ ok: false, error: "empty model response" }, 502);
-        }
-        return json({ ok: true, model: MODEL, response: result.response.trim() });
-      } catch (e) {
-        // No secret, token, prompt, or full provider error returned to the client.
-        console.error("AI diagnostic failed", String(e?.message || "unknown").slice(0, 100));
-        return json({ ok: false, error: "AI inference failed; inspect Cloudflare logs" }, 502);
-      }
-    }
-    // Temporary protected integration check; no Telegram messages or AI charges.
-    if (url.pathname === "/test-state" && request.method === "POST") {
-      if (!env.TELEGRAM_WEBHOOK_SECRET || !env.AGENT_KV) return json({ error: "not configured" }, 503);
-      if (!secureEquals(request.headers.get("X-Agent-Test-Secret"), env.TELEGRAM_WEBHOOK_SECRET)) {
-        return json({ error: "unauthorized" }, 401);
-      }
-      try {
-        const stats = await getStats();
-        const valid = stats.months.length > 0 && stats.months.every(m =>
-          Number.isFinite(m.sessions) && Number.isFinite(m.beneficiaries) &&
-          Number.isFinite(m.children) && Number.isFinite(m.adults) &&
-          m.children + m.adults === m.beneficiaries
-        );
-        const totals = stats.months.reduce((a, m) => ({
-          sessions: a.sessions + m.sessions,
-          beneficiaries: a.beneficiaries + m.beneficiaries
-        }), { sessions: 0, beneficiaries: 0 });
-        const key = "diagnostic:integration";
-        await env.AGENT_KV.put(key, "ok", { expirationTtl: 120 });
-        const stored = await env.AGENT_KV.get(key);
-        return json({
-          ok: valid && stored === "ok",
-          coverage: stats.coverage,
-          months: stats.months.length,
-          totals,
-          data_consistent: valid,
-          kv_read_write: stored === "ok"
-        }, valid && stored === "ok" ? 200 : 502);
-      } catch {
-        return json({ ok: false, error: "Integration check failed" }, 502);
-      }
-    }
     if (url.pathname !== "/telegram/webhook" || request.method !== "POST") return json({ error: "not found" }, 404);
     if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_USERNAME || !env.AI || !env.AGENT_KV) return json({ error: "not configured" }, 503);
     if (!secureEquals(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TELEGRAM_WEBHOOK_SECRET)) return json({ error: "unauthorized" }, 401);
@@ -205,7 +194,7 @@ export default {
     let update;
     try { update = await request.json(); } catch { return json({ error: "invalid json" }, 400); }
     if (!Number.isInteger(update?.update_id)) return json({ error: "invalid update" }, 400);
-    ctx.waitUntil(handle(update, env).catch(e => console.error("Webhook handler error", String(e?.message || "unknown").slice(0, 120))));
+    ctx.waitUntil(handle(update, env).catch(e => logEvent("handler_failed", { category: String(e?.message || "unknown").startsWith("Telegram API") ? "telegram_api" : "internal" })));
     return json({ ok: true });
   }
 };
