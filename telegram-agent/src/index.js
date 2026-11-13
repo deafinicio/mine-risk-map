@@ -6,6 +6,9 @@
 const MODEL = "@cf/meta/llama-3.1-8b-instruct-fast";
 const MAX_INPUT = 1800;
 const MAX_OUTPUT = 650;
+const MAX_DAILY_AI_CALLS = 40;
+const MAX_USER_DAILY_CALLS = 5;
+const MIN_SECONDS_BETWEEN_USER_CALLS = 60;
 const DASHBOARD = "https://deafinicio.github.io/mine-risk-map/dashboard.html";
 const DATA_URL = "https://deafinicio.github.io/mine-risk-map/data/dashboard-2026.json";
 
@@ -77,14 +80,41 @@ function systemPrompt(stats) {
     "Дані JSON: " + JSON.stringify(stats)
   ].join("\n");
 }
+// KV storage is required for webhook operation. Without it the agent fails closed.
+// KV provides best-effort duplicate suppression and quotas; it is eventually consistent.
+async function reserveRequest(update, env) {
+  const m = update.message;
+  const day = new Date().toISOString().slice(0, 10);
+  const dedupKey = "update:" + update.update_id;
+  if (await env.AGENT_KV.get(dedupKey)) return "duplicate";
+  const userId = String(m.from.id);
+  const dailyUserKey = "quota:user:" + day + ":" + userId;
+  const dailyGlobalKey = "quota:global:" + day;
+  const lastKey = "quota:last:" + userId;
+  const [u, g, last] = await Promise.all([
+    env.AGENT_KV.get(dailyUserKey), env.AGENT_KV.get(dailyGlobalKey), env.AGENT_KV.get(lastKey)
+  ]);
+  const now = Math.floor(Date.now() / 1000);
+  if (Number(g || 0) >= MAX_DAILY_AI_CALLS || Number(u || 0) >= MAX_USER_DAILY_CALLS ||
+      (last && now - Number(last) < MIN_SECONDS_BETWEEN_USER_CALLS)) return "limited";
+  await Promise.all([
+    env.AGENT_KV.put(dedupKey, "1", { expirationTtl: 86400 }),
+    env.AGENT_KV.put(dailyUserKey, String(Number(u || 0) + 1), { expirationTtl: 172800 }),
+    env.AGENT_KV.put(dailyGlobalKey, String(Number(g || 0) + 1), { expirationTtl: 172800 }),
+    env.AGENT_KV.put(lastKey, String(now), { expirationTtl: 3600 })
+  ]);
+  return "accepted";
+}
 async function handle(update, env) {
   const message = update.message;
-  if (!message || !message.text || message.from?.is_bot) return;
+  if (!message || !message.text || message.from?.is_bot || !message.from?.id) return;
   if (String(message.chat?.id) !== String(env.TELEGRAM_CHAT_ID)) return;
   const username = env.TELEGRAM_BOT_USERNAME || "";
   if (!isDirect(message, username)) return;
   const text = message.text.trim().slice(0, MAX_INPUT);
   if (!text) return;
+  const admission = await reserveRequest(update, env);
+  if (admission !== "accepted") return;
   if (isEmergency(text)) {
     await send(env, message.chat.id, message.message_id, emergencyText());
     return;
@@ -99,18 +129,18 @@ async function handle(update, env) {
       max_tokens: MAX_OUTPUT, temperature: 0.2
     });
     answer = typeof result?.response === "string" ? result.response.trim() : "";
-  } catch (e) {
-    console.error("AI request failed", String(e?.message || "unknown").slice(0, 120));
+  } catch {
     answer = "Наразі ШІ-асистент недоступний. Спробуйте пізніше. Публічна статистика: " + DASHBOARD;
   }
   await send(env, message.chat.id, message.message_id, answer || "Не вдалося підготувати відповідь. Спробуйте переформулювати запитання.");
 }
+
 export default {
   async fetch(request, env, ctx) {
     const url = new URL(request.url);
     if (url.pathname === "/health" && request.method === "GET") return json({ ok: true, service: "eore-analytics-agent" });
     if (url.pathname !== "/telegram/webhook" || request.method !== "POST") return json({ error: "not found" }, 404);
-    if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.AI) return json({ error: "not configured" }, 503);
+    if (!env.TELEGRAM_WEBHOOK_SECRET || !env.TELEGRAM_BOT_TOKEN || !env.TELEGRAM_CHAT_ID || !env.TELEGRAM_BOT_USERNAME || !env.AI || !env.AGENT_KV) return json({ error: "not configured" }, 503);
     if (!secureEquals(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TELEGRAM_WEBHOOK_SECRET)) return json({ error: "unauthorized" }, 401);
     if (!request.headers.get("content-type")?.includes("application/json")) return json({ error: "invalid content type" }, 415);
     if (Number(request.headers.get("content-length") || 0) > 100000) return json({ error: "payload too large" }, 413);
